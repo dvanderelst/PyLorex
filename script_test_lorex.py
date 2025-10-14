@@ -11,10 +11,12 @@ cam = Lorex.LorexCamera("tiger")
 cam.set_alpha(0.0)  # tightly cropped undistorted frame
 f = cam.get_frame(undistort=True)
 plt.imshow(f)
+plt.title("undistorted")
 plt.show()
 
 f = cam.get_frame(undistort=False)
 plt.imshow(f)
+plt.title("distorted")
 plt.show()
 
 cam.stop()
