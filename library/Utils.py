@@ -9,6 +9,7 @@ def get_calibration_paths(camera_name):
     image_folder = os.path.join(root_folder, f"images_{camera_name}")
     result_folder = os.path.join(root_folder, "results")
     intrinsics_yml = os.path.join(result_folder, f"intrinsics_{camera_name}.yml")
+    intrinsics_report = os.path.join(result_folder, f"intrinsics_{camera_name}.html")
     undistorted_preview = os.path.join(result_folder, f"undistorted_{camera_name}.jpg")
 
     images_glob = []
@@ -19,7 +20,8 @@ def get_calibration_paths(camera_name):
                 'result_folder': result_folder,
                 'calibration_images': images_glob,
                 'intrinsics_yml': intrinsics_yml,
-                'undistorted_preview': undistorted_preview }
+                'undistorted_preview': undistorted_preview,
+                'intrinsics_report': intrinsics_report }
     return results
 
 
