@@ -5,7 +5,7 @@ import shutil
 
 def get_calibration_paths(camera_name):
     camera_name = str(camera_name)
-    root_folder = Settings.calibration_folder
+    root_folder = 'calibration'
     image_folder = os.path.join(root_folder, f"images_{camera_name}")
     result_folder = os.path.join(root_folder, "results")
     intrinsics_yml = os.path.join(result_folder, f"intrinsics_{camera_name}.yml")

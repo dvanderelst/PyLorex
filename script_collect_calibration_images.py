@@ -1,19 +1,20 @@
-from library import Lorex
+import os
 from library import Utils
 from library import Sound
 from library import Settings
-import os
+from library import Grabber
+
 
 # Configuration ######################
-channel = 2 # Which RTSP channel to use
-camera_name = 'tiger' # The ID of the camera
+
+camera_name = 'shark' # The ID of the camera
 number_of_images = 20
 #######################################
 
-
+channel = Settings.channels[camera_name]
 folders = Utils.get_calibration_paths(camera_name)
 sounds = Sound.SoundPlayer(sound_folder='library/sounds')
-camera = Lorex.LiveRTSPGrabber(channel=channel)
+camera = FrameGrabber.RTSPGrabber(channel=channel)
 
 image_folder = folders['image_folder']
 Utils.create_folder(image_folder)
@@ -27,3 +28,4 @@ for counter in range(number_of_images):
     sounds.play('shutter')
 
 print('Done.')
+camera.stop()

@@ -5,7 +5,7 @@ import numpy as np
 from natsort import natsorted
 from library import Utils
 
-camera_name = 'tiger'
+camera_name = 'shark'
 
 ### CONFIGURATION ########################################################
 
