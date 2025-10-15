@@ -196,67 +196,22 @@ def _homography_reproj_stats(H, img_pts, obj_pts_mm):
     mxx  = float(np.max(errs)) if errs.size else float("nan")
     return rms, mxx, errs
 
-
-# geo_helpers.py
-import numpy as np
-import cv2 as cv
-
-def pixel_to_ray_cam(u, v, K, dist=None):
-    """Return a unit ray direction in CAMERA coords from pixel (u,v)."""
-    p = np.array([[[u, v]]], dtype=np.float32)  # (1,1,2)
-    if dist is not None:
-        # undistort to normalized camera coords, output with P = I
-        pn = cv.undistortPoints(p, K, dist, P=np.eye(3, dtype=np.float32)).reshape(2)
-        x, y = float(pn[0]), float(pn[1])
-        d_cam = np.array([x, y, 1.0], dtype=float)
-    else:
-        # assume already undistorted and K applies directly
-        d_cam = np.linalg.inv(K) @ np.array([u, v, 1.0], dtype=float)
-    return d_cam / np.linalg.norm(d_cam)
-
-def intersect_ray_with_board(d_cam, R, t):
-    """
-    Intersect a camera-frame ray with the Z=0 plane of the BOARD frame.
-    R,t map BOARD -> CAMERA:  X_cam = R X_board + t
-    Camera center in BOARD frame: Cb = -R^T t
-    Ray direction in BOARD frame: db = R^T d_cam
-    Intersection with Z=0:  Cb + s*db,  s = -Cb.z / db.z
-    Returns (X,Y,0) in BOARD mm. Raises if parallel.
-    """
-    Cb = -R.T @ t
-    db = R.T @ d_cam.reshape(3,1)
-    dz = float(db[2,0])
-    if abs(dz) < 1e-9:
-        raise RuntimeError("Ray is (near) parallel to the board plane.")
-    s = -float(Cb[2,0]) / dz
-    Pb = (Cb + s*db).reshape(3)
-    Pb[2] = 0.0
-    return Pb  # (X,Y,0) in mm on the board plane
-
-def pixel_to_board_xy_raw(u, v, H_raw):
-    """
-    Map RAW pixel (u,v) to board (X,Y) using homography H_raw (image->board).
-    Assumes the point lies on the board plane (Z=0) & H was estimated for RAW pixels.
-    """
-    x = H_raw @ np.array([u, v, 1.0], dtype=float)
-    X = x[0]/x[2]; Y = x[1]/x[2]
-    return float(X), float(Y)
-
-
-
 def write_homography_report(
     camera_name: str,
     input_bgr: np.ndarray,
     H: np.ndarray,
-    cols: int, rows: int,
+    cols: int,
+    rows: int,
     square_size_mm: float,
     mm_per_px: float,
-    corners: np.ndarray = None,   # optional (for error stats + overlay)
-    obj_mm: np.ndarray = None,    # optional (for error stats)
-    rectified_bgr: np.ndarray = None,  # optional (embed rectified)
-    K: np.ndarray = None,         # optional (derive pose from H if R,t omitted)
+    corners: np.ndarray = None,
+    obj_mm: np.ndarray = None,
+    rectified_bgr: np.ndarray = None,
+    K: np.ndarray = None,
     R: np.ndarray = None,
     t: np.ndarray = None,
+    axes_overlay_bgr: np.ndarray = None,
+    origin_preset="TL"# optional XY overlay image
 ) -> Path:
     """
     Write a single-file HTML report to Utils.get_calibration_paths(camera_name)["homography_report"].
@@ -289,6 +244,7 @@ def write_homography_report(
     in_vis = _image_with_corners(input_bgr, (cols, rows), corners) if corners is not None else input_bgr
     in_uri = _bgr_to_data_uri(in_vis)
     rect_uri = _bgr_to_data_uri(rectified_bgr) if rectified_bgr is not None else ""
+    axes_uri = _bgr_to_data_uri(axes_overlay_bgr) if axes_overlay_bgr is not None else ""
 
     # Image-center → plane (mm)
     h, w = input_bgr.shape[:2]
@@ -366,9 +322,88 @@ img {{ max-width:100%; height:auto; border-radius:10px; border:1px solid #eee }}
     <h2>Images</h2>
     <div><b>Input with detected corners</b></div>
     <img src="{in_uri}" alt="input-with-corners" />
+    {"<div style='height:10px'></div><div><b>Axes overlay</b></div><img src='" + axes_uri + "' alt='axes-overlay' />" if axes_uri else ""}
     {"<div style='height:10px'></div><div><b>Rectified (top-down)</b></div><img src='" + rect_uri + "' alt='rectified' />" if rect_uri else ""}
   </div>
 </body></html>
 """
     html_path.write_text(html, encoding="utf-8")
     return html_path
+
+
+# ---------- Geometry helpers for pixel <-> board ----------
+def pixel_to_board_xy_raw(u, v, H):
+    x = H @ np.array([u, v, 1.0], dtype=float)
+    X = x[0]/x[2]; Y = x[1]/x[2]
+    return float(X), float(Y)
+
+def pixel_to_ray_cam(u, v, K, dist=None):
+    p = np.array([[[u, v]]], dtype=np.float32)  # (1,1,2)
+    if dist is not None:
+        pn = cv.undistortPoints(p, K, dist, P=np.eye(3, dtype=np.float32)).reshape(2)
+        x, y = float(pn[0]), float(pn[1])
+        d_cam = np.array([x, y, 1.0], dtype=float)
+    else:
+        d_cam = np.linalg.inv(K) @ np.array([u, v, 1.0], dtype=float)
+    return d_cam / np.linalg.norm(d_cam)
+
+def intersect_ray_with_board(d_cam, R, t):
+    Cb = -R.T @ t
+    db = R.T @ d_cam.reshape(3,1)
+    dz = float(db[2,0])
+    if abs(dz) < 1e-9:
+        raise RuntimeError("Ray is (near) parallel to the board plane.")
+    s = -float(Cb[2,0]) / dz
+    Pb = (Cb + s*db).reshape(3)
+    Pb[2] = 0.0
+    return Pb
+
+
+def reframe_obj_mm(obj_mm, cols, rows, square_mm, origin="TL"):
+    """
+    Remap the 2D board model to use a different origin/sense.
+    origin ∈ {"TL","TR","BL","BR"} (T=top, B=bottom, L=left, R=right in *image* sense)
+
+    TL: default OpenCV (no change)
+    TR: flip X around Xmax
+    BL: flip Y around Ymax
+    BR: flip both
+    """
+    Xmax = (cols - 1) * square_mm
+    Ymax = (rows - 1) * square_mm
+    pts = obj_mm.reshape(-1, 2).copy()
+
+    if origin in ("TR", "BR"):  # flip X
+        pts[:, 0] = Xmax - pts[:, 0]
+    if origin in ("BL", "BR"):  # flip Y
+        pts[:, 1] = Ymax - pts[:, 1]
+
+    return pts.reshape(obj_mm.shape)
+
+
+def draw_board_axes_overlay(frame_bgr, rvec, tvec, K, dist, cols, rows, square_mm, label):
+    Xmax = (cols - 1) * square_mm
+    Ymax = (rows - 1) * square_mm
+
+    O  = np.float32([[0,0,0]])
+    X1 = np.float32([[square_mm,0,0]])
+    Y1 = np.float32([[0,square_mm,0]])
+
+
+    axis_len = max(Xmax, Ymax) / 3.0
+    def extend(A,B,L):
+        v = (B-A); v = v/ (np.linalg.norm(v)+1e-9); return A + v*L
+
+    Xtip = extend(O, X1, axis_len)
+    Ytip = extend(O, Y1, axis_len)
+
+    pts3 = np.vstack([O, Xtip, Ytip]).astype(np.float32)
+    img, _ = cv.projectPoints(pts3, rvec, tvec, K, dist)
+    p0, px, py = [tuple(np.round(p).astype(int)) for p in img.reshape(-1,2)]
+
+    out = frame_bgr.copy()
+    cv.circle(out, p0, 6, (255,255,255), -1)
+    cv.line(out, p0, px, (0,0,255), 3); cv.putText(out, "X", px, cv.FONT_HERSHEY_SIMPLEX, 1,(0,0,255),2, cv.LINE_AA)
+    cv.line(out, p0, py, (0,255,0), 3); cv.putText(out, "Y", py, cv.FONT_HERSHEY_SIMPLEX, 1,(0,255,0),2, cv.LINE_AA)
+    cv.putText(out, f"origin={label}", (p0[0]+8, p0[1]-8), cv.FONT_HERSHEY_SIMPLEX, 0.6,(255,255,255),2, cv.LINE_AA)
+    return out
