@@ -14,7 +14,7 @@ number_of_images = 20
 channel = Settings.channels[camera_name]
 folders = Utils.get_calibration_paths(camera_name)
 sounds = Sound.SoundPlayer(sound_folder='library/sounds')
-camera = FrameGrabber.RTSPGrabber(channel=channel)
+camera = Grabber.RTSPGrabber(channel=channel)
 
 image_folder = folders['image_folder']
 Utils.create_folder(image_folder)

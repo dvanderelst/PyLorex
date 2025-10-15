@@ -1,17 +1,12 @@
 import glob
-import os
 import cv2 as cv
 import numpy as np
 from natsort import natsorted
 from library import Utils
+from library import Settings
 
+###########################################################################
 camera_name = 'shark'
-
-### CONFIGURATION ########################################################
-
-inner_cols = 11
-inner_rows = 7
-square_size = 30.0
 visual_check = True
 ###########################################################################
 
@@ -24,6 +19,10 @@ undistort_preview = folders['undistorted_preview']
 Utils.create_folder(result_folder, clear=False)
 
 # === PREPARE OBJECT SPACE CORNERS ===
+inner_cols = Settings.intrinsic_inner_cols
+inner_rows = Settings.intrinsic_inner_rows
+square_size = Settings.intrinsic_square_mm
+
 objp = np.zeros((inner_rows * inner_cols, 3), np.float32)
 objp[:, :2] = np.mgrid[0:inner_cols, 0:inner_rows].T.reshape(-1, 2)
 objp *= square_size

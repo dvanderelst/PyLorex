@@ -1,11 +1,8 @@
 import os, cv2, threading, time
 from library import Settings
 
-# Low-latency FFmpeg hints (only if CAP_FFMPEG is in your build)
-os.environ.setdefault(
-    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
-    "rtsp_transport;tcp|max_delay;0|buffer_size;10240|stimeout;3000000"
-)
+
+
 
 class RTSPGrabber:
     def __init__(self, channel, auto_start=True):

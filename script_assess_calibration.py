@@ -2,11 +2,10 @@ import re, sys, math, statistics as stats
 from pathlib import Path
 from datetime import datetime
 from html import escape
+from library import Utils
 
-from library import Utils  # your utilities
 
-
-camera_name = "shark"   # <-- set your camera name here
+camera_name = "shark"
 
 # ---------- Heuristic thresholds (with brief explanations) ----------
 # MIN_IMAGES: We want enough diverse views for a stable calibration; <12 often underconstrained.
