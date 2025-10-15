@@ -4,7 +4,6 @@ from datetime import datetime
 from html import escape
 from library import Utils
 
-
 camera_name = "shark"
 
 # ---------- Heuristic thresholds (with brief explanations) ----------

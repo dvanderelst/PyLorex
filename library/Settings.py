@@ -1,8 +1,11 @@
 import os
+import cv2 as cv
 
-key = "OPENCV_FFMPEG_CAPTURE_OPTIONS"
-value = "rtsp_transport;tcp|max_delay;0|buffer_size;10240|stimeout;3000000"
-os.environ.setdefault(key, value)
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|max_delay;0|buffer_size;10240|stimeout;3000000")
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
+cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
+cv.setNumThreads(1)         # Single-threaded (reproducible results)
 
 lorex_ip = '192.168.1.8'
 username = 'admin'

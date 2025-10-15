@@ -1,24 +1,18 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os, json
 import numpy as np
 import cv2 as cv
+from library import Settings
+from library import Lorex
+from library import Utils
+from library import Homography as hg
 
-from library import Settings, Lorex, Utils, Homography as hg
 
-# -------- stable OpenCV behaviour --------
-os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
-cv.ocl.setUseOpenCL(False)
-cv.setNumThreads(1)
 
-# ---------------- USER SETTINGS ----------------
+# ---------------- SETTINGS ----------------
 alpha = 0.0
 camera_name = "tiger"
-show_preview = False
 origin_preset = "TR"
 # ------------------------------------------------
-
 
 paths = Utils.get_calibration_paths(camera_name)
 camera = Lorex.LorexCamera(camera_name)
@@ -30,10 +24,13 @@ h_img, w_img = frame.shape[:2]
 
 K_raw, dist = hg.load_intrinsics(camera_name)
 W_calib, H_calib = camera.calib_size
-sx = w_img / float(W_calib); sy = h_img / float(H_calib)
+sx = w_img / float(W_calib);
+sy = h_img / float(H_calib)
 K_scaled = K_raw.copy()
-K_scaled[0,0] *= sx; K_scaled[1,1] *= sy
-K_scaled[0,2] *= sx; K_scaled[1,2] *= sy
+K_scaled[0, 0] *= sx;
+K_scaled[1, 1] *= sy
+K_scaled[0, 2] *= sx;
+K_scaled[1, 2] *= sy
 
 square_size_mm = Settings.homography_square_mm
 inner_cols = Settings.homography_inner_cols
@@ -46,12 +43,12 @@ print(f"[detect] inner corners: {cols} x {rows}")
 obj_mm = hg.board_points_mm(cols, rows, square_size_mm)
 obj_mm = hg.reframe_obj_mm(obj_mm, cols, rows, square_size_mm, origin_preset)
 
-obj_xyz = np.concatenate([obj_mm.reshape(-1,2), np.zeros((obj_mm.size//2,1), dtype=np.float32)], axis=1).astype(np.float32)
-img_pts = corners.reshape(-1,1,2).astype(np.float32)
+obj_xyz = np.concatenate([obj_mm.reshape(-1, 2), np.zeros((obj_mm.size // 2, 1), dtype=np.float32)], axis=1).astype(np.float32)
+img_pts = corners.reshape(-1, 1, 2).astype(np.float32)
 
 # Homography for rectification
 H_raw, _ = hg.estimate_homography(corners, obj_mm)
-width_mm  = (cols - 1) * square_size_mm
+width_mm = (cols - 1) * square_size_mm
 height_mm = (rows - 1) * square_size_mm
 rectified = hg.rectify_image(frame, H_raw, width_mm, height_mm, mm_per_px=mm_per_px)
 
@@ -59,10 +56,10 @@ rectified = hg.rectify_image(frame, H_raw, width_mm, height_mm, mm_per_px=mm_per
 ok, rvec, tvec = cv.solvePnP(obj_xyz, img_pts, K_scaled, dist, flags=cv.SOLVEPNP_EPNP)
 R_pnp, _ = cv.Rodrigues(rvec)
 cam_center = -R_pnp.T @ tvec
-dist_pnp = float(abs(cam_center[2,0]))
+dist_pnp = float(abs(cam_center[2, 0]))
 proj, _ = cv.projectPoints(obj_xyz, rvec, tvec, K_scaled, dist)
-rp_err = float(np.sqrt(np.mean(np.sum((proj.reshape(-1,2) - corners)**2, axis=1))))
-print(f"[PnP] distance to board (mm): {dist_pnp:.2f}  (~{dist_pnp/10:.1f} cm)")
+rp_err = float(np.sqrt(np.mean(np.sum((proj.reshape(-1, 2) - corners) ** 2, axis=1))))
+print(f"[PnP] distance to board (mm): {dist_pnp:.2f}  (~{dist_pnp / 10:.1f} cm)")
 print(f"[PnP] reprojection RMSE (px): {rp_err:.3f}")
 
 overlay = hg.draw_board_axes_overlay(
@@ -71,17 +68,16 @@ overlay = hg.draw_board_axes_overlay(
     label=origin_preset
 )
 
-raw_path       = paths['raw_image']
+raw_path = paths['raw_image']
 rectified_path = paths['rectified_image']
-overlay_path   = paths['axes_overlay']
+overlay_path = paths['axes_overlay']
 
 cv.imwrite(raw_path, frame)
 cv.imwrite(rectified_path, rectified)
 cv.imwrite(overlay_path, overlay)
 
-# JSON + NPZ
 pose_json_path = paths.get('pose_json', os.path.join(paths['result_folder'], f"pose_{camera_name}.json"))
-pose_npz_path  = paths.get('pose_npz',  os.path.join(paths['result_folder'], f"pose_{camera_name}.npz"))
+pose_npz_path = paths.get('pose_npz', os.path.join(paths['result_folder'], f"pose_{camera_name}.npz"))
 
 summary = {
     "camera_name": camera_name,
@@ -112,12 +108,12 @@ np.savez_compressed(
     K_scaled=K_scaled, dist=dist, H_raw=H_raw,
     R_pnp=R_pnp, t_pnp=tvec,
     obj_mm=obj_mm, obj_xyz=obj_xyz,
-    img_pts=img_pts.reshape(-1,2), corners=corners
+    img_pts=img_pts.reshape(-1, 2), corners=corners
 )
 
 report_path = hg.write_homography_report(
     camera_name=camera_name,
-    input_bgr=frame,              # CLEAN RAW frame (no drawings)
+    input_bgr=frame,  # CLEAN RAW frame (no drawings)
     H=H_raw,
     cols=cols, rows=rows,
     square_size_mm=square_size_mm,
@@ -127,7 +123,7 @@ report_path = hg.write_homography_report(
     rectified_bgr=rectified,
     K=K_scaled,
     R=R_pnp, t=tvec,
-    axes_overlay_bgr=overlay,     # overlay shown only once
+    axes_overlay_bgr=overlay,  # overlay shown only once
     origin_preset=origin_preset
 )
 
@@ -135,5 +131,3 @@ print("\n=== OUTPUTS ===")
 print(f"JSON   : {paths.get('pose_json')}")
 print(f"NPZ    : {paths.get('pose_npz')}")
 print(f"Report : {report_path}")
-
-
