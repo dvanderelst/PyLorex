@@ -1,7 +1,32 @@
 import cv2 as cv
 from os import path
 from pathlib import Path
-from library import Grabber, Settings, Utils, CalibIO, Homography as hg
+import numpy as np
+from math import atan2, degrees
+from library import Grabber
+from library import Settings
+from library import Utils
+from library import CalibIO
+from library import Homography as hg
+
+def compose_T(R, t):
+    T = np.eye(4, dtype=np.float64)
+    T[:3,:3] = R
+    T[:3, 3] = t.reshape(3)
+    return T
+
+def invert_extrinsics(R, t):
+    """Inverse of [R|t] where X_cam = R*X_board + t -> returns board_from_cam."""
+    R_inv = R.T
+    t_inv = -R_inv @ t.reshape(3)
+    return R_inv, t_inv
+
+def yaw_from_R_board_tag(R_board_tag, forward_axis='x', offset_deg=0.0):
+    ax = 0 if forward_axis.lower() == 'x' else 1  # 0->X, 1->Y in tag frame
+    v = R_board_tag[:, ax].reshape(3)             # forward axis expressed in board frame
+    yaw = degrees(atan2(float(v[1]), float(v[0])))  # atan2(y, x)
+    yaw = (yaw + offset_deg + 360.0) % 360.0
+    return yaw
 
 def load_calibration(camera_name):
     """Return (K, dist, size) from a saved intrinsics YAML."""
@@ -22,6 +47,22 @@ def undistort_image(img, K, dist, alpha=1.0):
     h, w = img.shape[:2]
     newK, _ = cv.getOptimalNewCameraMatrix(K, dist, (w, h), alpha)
     return cv.undistort(img, K, dist, None, newK)
+
+
+def detect_markers(aruco, frame, dict_obj):
+    # New API (4.7+)
+    if hasattr(aruco, "ArucoDetector"):
+        det_params = aruco.DetectorParameters()
+        detector = aruco.ArucoDetector(dict_obj, det_params)
+        corners, ids, _ = detector.detectMarkers(frame)
+    else:
+        # Old API fallback
+        if hasattr(aruco, "DetectorParameters_create"):
+            det_params = aruco.DetectorParameters_create()
+        else:
+            det_params = aruco.DetectorParameters()  # just in case
+        corners, ids, _ = aruco.detectMarkers(frame, dict_obj, parameters=det_params)
+    return corners, ids
 
 class LorexCamera:
     def __init__(self, camera_name, auto_start=True, alpha=1.0):
@@ -189,3 +230,116 @@ class LorexCamera:
             d_cam = hg.pixel_to_ray_cam(u, v, K_used, dist_used)
             P = hg.intersect_ray_with_board(d_cam, R, t)
             return float(P[0]), float(P[1])
+
+    def get_aruco(self, draw=False):
+        # --- Settings ---
+        aruco_dict = Settings.aruco_dict  # e.g. "DICT_5X5_100"
+        aruco_size = float(Settings.aruco_size)  # mm
+        aruco_forward_axis = Settings.aruco_forward_axis  # 'x' or 'y'
+        aruco_yaw_offset_deg = float(Settings.aruco_yaw_offset_deg)
+
+        # --- Ensure bundle is loaded ---
+        if not self.has_bundle():
+            try:
+                self.load_board_bundle()
+                print(f"[bundle] Loaded pose bundle for {self.camera_name}")
+            except Exception as e:
+                print(f"[bundle] Could not load pose bundle: {e}")
+                # still continue: you can compute yaw/height=None, but pixel→board won't work
+                self.bundle = None
+
+        frame = self.get_frame(undistort=False)
+        if frame is None:
+            return [], None
+
+        K_used, dist_used = self.get_current_intrinsics(frame.shape, undistort=False)
+        if K_used is None:
+            return [], (frame.copy() if draw else None)
+
+        # --- Board (floor) extrinsics: guard access ---
+        R_board_from_cam = None
+        t_board_from_cam = None
+        if self.bundle is not None and "R" in self.bundle and "t" in self.bundle:
+            cam_R_from_board = self.bundle["R"]
+            cam_t_from_board = self.bundle["t"].reshape(3)
+            R_board_from_cam, t_board_from_cam = invert_extrinsics(cam_R_from_board, cam_t_from_board)
+
+        # --- ArUco dict ---
+        aruco = cv.aruco
+        if not hasattr(aruco, aruco_dict):
+            raise ValueError(f"ArUco dictionary '{aruco_dict}' not found in cv.aruco.")
+        dict_id = getattr(aruco, aruco_dict)
+        aruco_dict_loaded = aruco.getPredefinedDictionary(dict_id)
+
+        # --- Detect (handles both API versions) ---
+        corners, ids = detect_markers(aruco, frame, aruco_dict_loaded)
+
+        vis = frame.copy() if draw else None
+        if ids is None or len(ids) == 0:
+            return [], vis
+
+        # --- Square object points (TL,TR,BR,BL) in mm ---
+        half = aruco_size / 2.0
+        obj_square = np.array(
+            [[-half, half, 0.0],
+             [half, half, 0.0],
+             [half, -half, 0.0],
+             [-half, -half, 0.0]], dtype=np.float32
+        )
+
+        detections = []
+        for c, tag_id in zip(corners, ids.flatten()):
+            pts = c.reshape(-1, 2).astype(np.float32)  # (4,2)
+            imgp = pts.reshape(-1, 1, 2)
+
+            ok, rvec, tvec = cv.solvePnP(
+                obj_square, imgp, K_used, dist_used, flags=cv.SOLVEPNP_IPPE_SQUARE
+            )
+            if not ok:
+                continue
+
+            # Floor (X,Y) at tag center
+            u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
+            X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
+
+            # Orientation & height (if extrinsics known)
+            yaw_deg = None
+            height_mm = None
+            if R_board_from_cam is not None:
+                R_cam_tag, _ = cv.Rodrigues(rvec)
+                t_cam_tag = tvec.reshape(3)
+                R_board_tag = R_board_from_cam @ R_cam_tag
+                t_board_tag = R_board_from_cam @ t_cam_tag + t_board_from_cam
+                yaw_deg = yaw_from_R_board_tag(R_board_tag, aruco_forward_axis, aruco_yaw_offset_deg)
+                height_mm = float(t_board_tag[2])
+
+            det = {
+                "id": int(tag_id),
+                "floor_xy_mm": (float(X_floor), float(Y_floor)),
+                "yaw_deg": None if yaw_deg is None else float(yaw_deg),
+                "height_mm": None if height_mm is None else float(height_mm),
+                "rvec_cam_tag": rvec,
+                "tvec_cam_tag": tvec,
+                "center_px": (u, v),
+                "corners_px": pts.copy(),
+            }
+            detections.append(det)
+
+            if draw and vis is not None:
+                # per-marker overlay is fine…
+                cv.aruco.drawDetectedMarkers(
+                    vis, [pts.reshape(1, 4, 2)], np.array([[tag_id]], dtype=np.int32)
+                )
+                cv.drawFrameAxes(vis, K_used, dist_used, rvec, tvec, 0.25 * aruco_size)
+                label = f"id={tag_id}"
+                if det["yaw_deg"] is not None:
+                    label += f"  yaw={det['yaw_deg']:.1f}°"
+                if det["height_mm"] is not None:
+                    label += f"  h={det['height_mm']:.0f}mm"
+                cv.putText(vis, label, (int(u) + 8, int(v) - 8),
+                           cv.FONT_HERSHEY_SIMPLEX, 0.6, (25, 225, 25), 2, cv.LINE_AA)
+        temp_dir = Settings.temp_dir
+        output_file = path.join(temp_dir, "aruco_overlay.jpg")
+        cv.imwrite(output_file, vis)
+        return detections
+

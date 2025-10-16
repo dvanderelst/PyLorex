@@ -1,6 +1,5 @@
 from library import Lorex
-from matplotlib import pyplot as plt
-from library import Homography as hg
+from library import Settings
 import os, cv2 as cv
 
 
@@ -19,10 +18,13 @@ u, v = w//2, h//2
 # 2) H-path (raw -> board)
 xH, yH = cam.pixel_to_board_xy(u, v, use_raw=True)
 
+detections = cam.get_aruco(draw=True)
+print(detections)
+
 # # 3) Ray-plane path using the *same* raw pixel and the *same* K/dist from bundle
 # d_cam = hg.pixel_to_ray_cam(u, v, Kb, dist)
 # P     = hg.intersect_ray_with_board(d_cam, cam.bundle["R"], cam.bundle["t"])
 # xRT, yRT = float(P[0]), float(P[1])
 #
 # print(f"RAW pixel ({u},{v})  H:({xH:.2f},{yH:.2f})  RT:({xRT:.2f},{yRT:.2f})  Δ=({xRT-xH:.2f},{yRT-yH:.2f}) mm")
-# cam.stop()
+cam.stop()
