@@ -11,7 +11,7 @@ from library import Homography as hg
 # ---------------- SETTINGS ----------------
 alpha = 0.0
 camera_name = "tiger"
-origin_preset = "TR"
+origin_preset = "BL"
 # ------------------------------------------------
 
 paths = Utils.get_calibration_paths(camera_name)

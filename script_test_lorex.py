@@ -1,7 +1,8 @@
 from library import Lorex
 from library import Settings
+from matplotlib import pyplot as plt
 import os, cv2 as cv
-
+import time
 
 cam = Lorex.LorexCamera("tiger")
 # 1) Load the saved homography/pose bundle (from your earlier script)
@@ -15,11 +16,23 @@ frame_raw = cam.get_frame(undistort=False)
 h, w = frame_raw.shape[:2]
 u, v = w//2, h//2
 
+plt.figure()
+plt.imshow(frame_raw)
+plt.show()
+print('frame shape:', frame_raw.shape)
+
 # 2) H-path (raw -> board)
 xH, yH = cam.pixel_to_board_xy(u, v, use_raw=True)
 
-detections = cam.get_aruco(draw=True)
-print(detections)
+counter = 0
+while True:
+    start = time.time()
+    detections = cam.get_aruco(draw=True)
+    end = time.time()
+    print(f"Detection time: {(end-start)*1000:.1f} ms")
+    counter += 1
+    print(counter)
+    time.sleep(1)
 
 # # 3) Ray-plane path using the *same* raw pixel and the *same* K/dist from bundle
 # d_cam = hg.pixel_to_ray_cam(u, v, Kb, dist)

@@ -7,7 +7,7 @@ class RTSPGrabber:
         self.ip = Settings.lorex_ip
         self.username = Settings.username
         self.password = Settings.password
-        self.subtype = 1
+        self.subtype = 0
 
         self.port = 554
         self.warmup_frames = 15

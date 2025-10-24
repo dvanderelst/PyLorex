@@ -9,7 +9,7 @@ cv.setNumThreads(1)         # Single-threaded (reproducible results)
 
 temp_dir = 'Temp'
 
-lorex_ip = '192.168.1.8'
+lorex_ip = '192.168.1.14'
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}

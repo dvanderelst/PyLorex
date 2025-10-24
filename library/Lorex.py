@@ -327,13 +327,11 @@ class LorexCamera:
 
             if draw and vis is not None:
                 # per-marker overlay is fine…
-                cv.aruco.drawDetectedMarkers(
-                    vis, [pts.reshape(1, 4, 2)], np.array([[tag_id]], dtype=np.int32)
-                )
+                cv.aruco.drawDetectedMarkers(vis, [pts.reshape(1,4,2)], None)
                 cv.drawFrameAxes(vis, K_used, dist_used, rvec, tvec, 0.25 * aruco_size)
                 label = f"id={tag_id}"
                 if det["yaw_deg"] is not None:
-                    label += f"  yaw={det['yaw_deg']:.1f}°"
+                    label += f"  yaw={det['yaw_deg']:.1f}dg"
                 if det["height_mm"] is not None:
                     label += f"  h={det['height_mm']:.0f}mm"
                 cv.putText(vis, label, (int(u) + 8, int(v) - 8),
