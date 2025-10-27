@@ -13,16 +13,17 @@ lorex_ip = '192.168.1.14'
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}
-intrinsic_square_mm = 30.0  # size of printed chessboard squares for intrinsics calibration
-intrinsic_inner_cols = 11
-intrinsic_inner_rows = 7
+# intrinsic_square_mm = 30.0  # size of printed chessboard squares for intrinsics calibration
+# intrinsic_inner_cols = 11
+# intrinsic_inner_rows = 7
+
+intrinsic_dot_diameter_mm = 40.0
+intrinsic_dot_rows = 5
+intrinsic_dot_cols = 10
+intrinsic_dot_spacing = intrinsic_dot_diameter_mm + 10.0
 
 homography_square_mm = 30.0  # size of printed chessboard squares for homography
 homography_inner_cols = 11
 homography_inner_rows = 7
 homography_mm_per_px = 1.0
 
-aruco_size = 60.0  # size of printed aruco markers in mm
-aruco_dict = "DICT_5X5_100"
-aruco_yaw_offset_deg = 0.0  # yaw offset to align aruco yaw with robot yaw
-aruco_forward_axis = 'x'

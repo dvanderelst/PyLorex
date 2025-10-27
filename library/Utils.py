@@ -5,11 +5,14 @@ import glob
 from natsort import natsorted
 
 
+
+
+
 def get_calibration_paths(camera_name):
     camera_name = str(camera_name)
-    root_folder = 'calibration'
-    calibration_images_folder = os.path.join(root_folder, f"calibration_images_{camera_name}")
-    result_folder = os.path.join(root_folder, "results")
+    root_folder = 'Calibration'
+    calibration_images_folder = os.path.join(root_folder, f"Calibration_images_{camera_name}")
+    result_folder = os.path.join(root_folder, "Results")
     intrinsics_yml = os.path.join(result_folder, f"intrinsics_{camera_name}.yml")
     intrinsics_report = os.path.join(result_folder, f"intrinsics_{camera_name}.html")
     undistorted_preview = os.path.join(result_folder, f"undistorted_{camera_name}.jpg")
@@ -34,11 +37,16 @@ def get_calibration_paths(camera_name):
         axes_overlay=axes_overlay,
     )
 
+
+def check_exists(folder_path):
+    folder = Path(folder_path)
+    return folder.exists()
+
+
 def create_folder(folder_path, clear=True):
     folder = Path(folder_path)
     if folder.exists():
         if clear:
-            # Empty the folder
             for item in folder.glob('*'):
                 if item.is_file(): item.unlink()
                 else: shutil.rmtree(item)
