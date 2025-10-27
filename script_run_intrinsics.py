@@ -1,19 +1,24 @@
-import glob
 import cv2 as cv
 import numpy as np
-from natsort import natsorted
 from library import Utils
 from library import Settings
 
 ###########################################################################
-camera_name = 'shark'
+camera_name = 'tiger'
 visual_check = True
 ###########################################################################
+def _fit_for_display(img, max_w=1280, max_h=800):
+    h, w = img.shape[:2]
+    scale = min(max_w / w, max_h / h, 1.0)
+    if scale < 1.0:
+        img = cv.resize(img, (int(w*scale), int(h*scale)), interpolation=cv.INTER_AREA)
+    return img
+
+
 
 folders = Utils.get_calibration_paths(camera_name)
-image_folder = folders['image_folder']
+calibration_images_folder = folders['calibration_images_folder']
 result_folder = folders['result_folder']
-calibration_images = folders['calibration_images']
 intrinsics_yml = folders['intrinsics_yml']
 undistort_preview = folders['undistorted_preview']
 Utils.create_folder(result_folder, clear=False)
@@ -32,7 +37,8 @@ imgpoints = []   # 2D points (one per valid image)
 used_files = []  # filenames used
 
 # === LOAD IMAGES ===
-files = natsorted(glob.glob(calibration_images))
+print(calibration_images_folder)
+files = Utils.get_sorted_images(calibration_images_folder)
 if not files: raise SystemExit(f"No images")
 print(f"[info] Found {len(files)} candidate images.")
 
@@ -41,6 +47,7 @@ img_size = None
 # === CORNER DETECTION (SB detector with fallback) ===
 for f in files:
     img = cv.imread(f, cv.IMREAD_COLOR)
+    print(f'[info] Processing {f}')
     if img is None:
         print(f"[warn] Cannot read: {f}")
         continue
@@ -53,6 +60,7 @@ for f in files:
     found, corners = cv.findChessboardCornersSB(img, (inner_cols, inner_rows), flags=flags)
 
     if not found:
+        print('[warn] Using fallback')
         # Fallback to classical detector + subpix refinement
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         found, corners = cv.findChessboardCorners(
@@ -76,11 +84,16 @@ for f in files:
     if visual_check:
         vis = img.copy()
         cv.drawChessboardCorners(vis, (inner_cols, inner_rows), corners, found)
-        cv.imshow("Corners", vis)
+        disp = _fit_for_display(vis, max_w=1280, max_h=800)  # tweak limits if you like
+        cv.imshow("Corners", disp)
         cv.waitKey(150)
 
 if visual_check:
-    cv.destroyAllWindows()
+    try:
+        cv.destroyWindow("Corners")
+    except cv.error:
+        pass
+    cv.waitKey(1)
 
 if len(objpoints) < 5:
     raise SystemExit(f"[error] Not enough valid views ({len(objpoints)}) for stable calibration. Collect more images at varied angles/distances.")

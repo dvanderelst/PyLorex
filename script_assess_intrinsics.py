@@ -4,7 +4,7 @@ from datetime import datetime
 from html import escape
 from library import Utils
 
-camera_name = "shark"
+camera_name = "tiger"
 
 # ---------- Heuristic thresholds (with brief explanations) ----------
 # MIN_IMAGES: We want enough diverse views for a stable calibration; <12 often underconstrained.

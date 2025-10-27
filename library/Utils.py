@@ -1,11 +1,14 @@
 from pathlib import Path
 import os
 import shutil
+import glob
+from natsort import natsorted
+
 
 def get_calibration_paths(camera_name):
     camera_name = str(camera_name)
     root_folder = 'calibration'
-    image_folder = os.path.join(root_folder, f"images_{camera_name}")
+    calibration_images_folder = os.path.join(root_folder, f"calibration_images_{camera_name}")
     result_folder = os.path.join(root_folder, "results")
     intrinsics_yml = os.path.join(result_folder, f"intrinsics_{camera_name}.yml")
     intrinsics_report = os.path.join(result_folder, f"intrinsics_{camera_name}.html")
@@ -19,6 +22,7 @@ def get_calibration_paths(camera_name):
 
     return dict(
         result_folder=result_folder,
+        calibration_images_folder = calibration_images_folder,
         intrinsics_yml=intrinsics_yml,
         intrinsics_report=intrinsics_report,
         undistorted_preview=undistorted_preview,
@@ -40,3 +44,9 @@ def create_folder(folder_path, clear=True):
                 else: shutil.rmtree(item)
     else: folder.mkdir(parents=True)
 
+
+def get_sorted_images(folder_path, recursive=False):
+    extensions = ('*.jpg', '*.jpeg', '*.png', '*.bmp', '*.tiff')
+    files = []
+    for ext in extensions: files.extend(glob.glob(f"{folder_path}/{ext}", recursive=recursive))
+    return natsorted(files)

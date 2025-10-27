@@ -8,7 +8,6 @@ class RTSPGrabber:
         self.username = Settings.username
         self.password = Settings.password
         self.subtype = 0
-
         self.port = 554
         self.warmup_frames = 15
 
@@ -173,3 +172,30 @@ class RTSPGrabber:
                 except Exception:
                     pass
                 self.cap = None
+
+    def show_latest_bgr(self, window_name="Full Resolution"):
+        """
+        Display the latest frame at full resolution using OpenCV.
+        Returns True if a frame was displayed, False otherwise.
+        """
+        frame = self.get_latest_bgr()
+        if frame is None:
+            print("[grabber] No frame available to display.")
+            return False
+
+        # Create a resizable window
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+        # Display the frame
+        cv2.imshow(window_name, frame)
+
+        # Resize the window to match the frame's dimensions
+        height, width = frame.shape[:2]
+        cv2.resizeWindow(window_name, width, height)
+
+        # Wait for a key press to close the window
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        return True
+
+
