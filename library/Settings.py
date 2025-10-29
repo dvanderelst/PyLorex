@@ -15,7 +15,7 @@ channels = {'tiger': 2,  'shark': 3}
 
 temp_dir = 'Temp'
 
-aruco_dict = 'DICT_4X4_100'
+aruco_dict_name = 'DICT_4X4_100'
 aruco_size = 60
 aruco_forward_axis = 'x'
 aruco_yaw_offset_deg = 0
