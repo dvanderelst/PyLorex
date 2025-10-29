@@ -1,4 +1,5 @@
 import cv2 as cv
+import pandas as pd
 from os import path
 from pathlib import Path
 import numpy as np
@@ -12,12 +13,30 @@ from library import Homography as hg
 half = Settings.aruco_size / 2.0
 obj_square = np.array([[-half, half, 0.0],[half, half, 0.0],[half, -half, 0.0],[-half, -half, 0.0]], np.float32)
 
+def parse_detections(detections):
+    detected = detections[0]
+    lines = []
+    for x in detected:
+        id = x['id']
+        x_mm = x['floor_xy_mm'][0]
+        y_mm = x['floor_xy_mm'][1]
+        yaw_deg = x['yaw_deg']
+        line =[id, x_mm, y_mm, yaw_deg]
+        lines.append(line)
+    header = ['id', 'x', 'y', 'yaw']
+    if len(lines) > 0:
+        lines = pd.DataFrame(lines)
+        lines.columns = header
+    else:
+        lines = pd.DataFrame(columns = header)
+    return lines
+
+
 def compose_T(R, t):
     T = np.eye(4, dtype=np.float64)
     T[:3,:3] = R
     T[:3, 3] = t.reshape(3)
     return T
-
 
 def ipt(p):
     return tuple(np.rint(p).astype(int))
@@ -55,20 +74,68 @@ def undistort_image(img, K, dist, alpha=1.0):
     newK, _ = cv.getOptimalNewCameraMatrix(K, dist, (w, h), alpha)
     return cv.undistort(img, K, dist, None, newK)
 
+def make_aruco_params(aruco):
+    # New or legacy API constructor
+    if hasattr(aruco, "DetectorParameters"):
+        p = aruco.DetectorParameters()
+    elif hasattr(aruco, "DetectorParameters_create"):
+        p = aruco.DetectorParameters_create()
+    else:
+        raise RuntimeError("[aruco] Could not create DetectorParameters")
+
+    # --- Thresholding (scene is consistent; keep range tight & fast) ---
+    # Smaller window range = less noise sensitivity, faster.
+    if hasattr(p, "adaptiveThreshWinSizeMin"):  p.adaptiveThreshWinSizeMin  = 5
+    if hasattr(p, "adaptiveThreshWinSizeMax"):  p.adaptiveThreshWinSizeMax  = 23
+    if hasattr(p, "adaptiveThreshWinSizeStep"): p.adaptiveThreshWinSizeStep = 2
+    if hasattr(p, "adaptiveThreshConstant"):    p.adaptiveThreshConstant    = 7  # try 6..9 if misses
+    # --- Size gating (skip blobs that are way too small/big) ---
+    # 46px side ≈ 184px perimeter; these rates suit 1080–4K frames well.
+    if hasattr(p, "minMarkerPerimeterRate"):    p.minMarkerPerimeterRate    = 0.03
+    if hasattr(p, "maxMarkerPerimeterRate"):    p.maxMarkerPerimeterRate    = 0.30
+
+    # --- Geometry & corner precision ---
+    if hasattr(p, "polygonalApproxAccuracyRate"): p.polygonalApproxAccuracyRate = 0.03
+    if hasattr(p, "minCornerDistanceRate"):       p.minCornerDistanceRate       = 0.05
+    if hasattr(p, "minDistanceToBorder"):         p.minDistanceToBorder         = 3
+
+    # Subpixel corner refinement = less pose jitter
+    if hasattr(aruco, "CORNER_REFINE_SUBPIX") and hasattr(p, "cornerRefinementMethod"):
+        p.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+    if hasattr(p, "cornerRefinementWinSize"):       p.cornerRefinementWinSize       = 5  # at 46px, 3–5 is good
+    if hasattr(p, "cornerRefinementMaxIterations"): p.cornerRefinementMaxIterations = 30
+    if hasattr(p, "cornerRefinementMinAccuracy"):   p.cornerRefinementMinAccuracy   = 0.01
+    # --- Cell warping (match cell size to your tag in pixels) ---
+    # 5x5 dict ⇒ 7×7 total with border; 46px/7 ≈ 6.6px per cell.
+    if hasattr(p, "perspectiveRemovePixelPerCell"):         p.perspectiveRemovePixelPerCell = 8  # try 6–8
+    if hasattr(p, "perspectiveRemoveIgnoredMarginPerCell"): p.perspectiveRemoveIgnoredMarginPerCell = 0.33
+    # --- Decoding strictness ---
+    if hasattr(p, "errorCorrectionRate"):                  p.errorCorrectionRate = 0.5  # slightly stricter than default
+    if hasattr(p, "maxErroneousBitsInBorderRate"):         p.maxErroneousBitsInBorderRate = 0.5
+    if hasattr(p, "minOtsuStdDev"):                        p.minOtsuStdDev = 5.0
+    # --- Polarity safety ---
+    if hasattr(p, "detectInvertedMarker"):  p.detectInvertedMarker = True
+    return p
 
 def detect_markers(aruco, frame, dict_obj):
-    # New API (4.7+)
+    """
+    Simple, version-tolerant ArUco marker detection.
+    Returns (corners, ids) or (None, None) if none found.
+    """
+    # Ensure image is grayscale
+    if frame.ndim == 3 and frame.shape[2] == 3: gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+    else: gray = frame.copy()
+    # Build detector parameters
+    params = make_aruco_params(aruco)
+    # --- API compatibility handling ---
     if hasattr(aruco, "ArucoDetector"):
-        det_params = aruco.DetectorParameters()
-        detector = aruco.ArucoDetector(dict_obj, det_params)
-        corners, ids, _ = detector.detectMarkers(frame)
+        # New API (OpenCV ≥ 4.7)
+        detector = aruco.ArucoDetector(dict_obj, params)
+        corners, ids, _ = detector.detectMarkers(gray)
     else:
-        # Old API fallback
-        if hasattr(aruco, "DetectorParameters_create"):
-            det_params = aruco.DetectorParameters_create()
-        else:
-            det_params = aruco.DetectorParameters()  # just in case
-        corners, ids, _ = aruco.detectMarkers(frame, dict_obj, parameters=det_params)
+        # Legacy API fallback
+        corners, ids, _ = aruco.detectMarkers(gray, dict_obj, parameters=params)
+
     return corners, ids
 
 class LorexCamera:
