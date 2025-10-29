@@ -1,8 +1,10 @@
 
 .idea/
 
-calibration/
+Calibration/
 
 library/__pycache__/
-
+library/voices/
 Temp/
+
+OldStuff/

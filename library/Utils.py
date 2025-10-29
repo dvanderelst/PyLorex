@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import cv2
 import shutil
 import glob
 from natsort import natsorted
@@ -7,9 +8,9 @@ from natsort import natsorted
 
 def get_calibration_paths(camera_name):
     camera_name = str(camera_name)
-    root_folder = 'calibration'
-    calibration_images_folder = os.path.join(root_folder, f"calibration_images_{camera_name}")
-    result_folder = os.path.join(root_folder, "results")
+    root_folder = 'Calibration'
+    calibration_images_folder = os.path.join(root_folder, f"Calibration_images_{camera_name}")
+    result_folder = os.path.join(root_folder, "Results")
     intrinsics_yml = os.path.join(result_folder, f"intrinsics_{camera_name}.yml")
     intrinsics_report = os.path.join(result_folder, f"intrinsics_{camera_name}.html")
     undistorted_preview = os.path.join(result_folder, f"undistorted_{camera_name}.jpg")
@@ -22,7 +23,7 @@ def get_calibration_paths(camera_name):
 
     return dict(
         result_folder=result_folder,
-        calibration_images_folder = calibration_images_folder,
+        calibration_images_folder=calibration_images_folder,
         intrinsics_yml=intrinsics_yml,
         intrinsics_report=intrinsics_report,
         undistorted_preview=undistorted_preview,
@@ -34,15 +35,23 @@ def get_calibration_paths(camera_name):
         axes_overlay=axes_overlay,
     )
 
+
+def check_exists(folder_path):
+    folder = Path(folder_path)
+    return folder.exists()
+
+
 def create_folder(folder_path, clear=True):
     folder = Path(folder_path)
     if folder.exists():
         if clear:
-            # Empty the folder
             for item in folder.glob('*'):
-                if item.is_file(): item.unlink()
-                else: shutil.rmtree(item)
-    else: folder.mkdir(parents=True)
+                if item.is_file():
+                    item.unlink()
+                else:
+                    shutil.rmtree(item)
+    else:
+        folder.mkdir(parents=True)
 
 
 def get_sorted_images(folder_path, recursive=False):
@@ -50,3 +59,11 @@ def get_sorted_images(folder_path, recursive=False):
     files = []
     for ext in extensions: files.extend(glob.glob(f"{folder_path}/{ext}", recursive=recursive))
     return natsorted(files)
+
+
+def show_full(img, window_name="Image"):
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, img)
+    cv2.resizeWindow(window_name, 1280, 720)  # fits screen, resizable
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
