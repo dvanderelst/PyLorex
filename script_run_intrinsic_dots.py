@@ -60,9 +60,9 @@ if save_visualizations:
     Utils.create_folder(os.path.join(result_folder, "detect_vis"), clear=False)
 
 # --------- Pattern settings (from Settings.py) ----------
-dot_rows = Settings.intrinsic_dot_rows            # e.g., 5
-dot_cols = Settings.intrinsic_dot_cols            # e.g., 10
-dot_spacing = Settings.intrinsic_dot_spacing      # center-to-center spacing (mm)
+dot_rows = Settings.calibration_dot_rows            # e.g., 5
+dot_cols = Settings.calibration_dot_cols            # e.g., 10
+dot_spacing = Settings.calibration_dot_spacing      # center-to-center spacing (mm)
 
 # --------- Object points (planar, Z=0) ----------
 objp = np.zeros((dot_rows * dot_cols, 3), np.float32)

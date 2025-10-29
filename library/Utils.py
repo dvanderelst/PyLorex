@@ -1,11 +1,9 @@
 from pathlib import Path
 import os
+import cv2
 import shutil
 import glob
 from natsort import natsorted
-
-
-
 
 
 def get_calibration_paths(camera_name):
@@ -25,7 +23,7 @@ def get_calibration_paths(camera_name):
 
     return dict(
         result_folder=result_folder,
-        calibration_images_folder = calibration_images_folder,
+        calibration_images_folder=calibration_images_folder,
         intrinsics_yml=intrinsics_yml,
         intrinsics_report=intrinsics_report,
         undistorted_preview=undistorted_preview,
@@ -48,9 +46,12 @@ def create_folder(folder_path, clear=True):
     if folder.exists():
         if clear:
             for item in folder.glob('*'):
-                if item.is_file(): item.unlink()
-                else: shutil.rmtree(item)
-    else: folder.mkdir(parents=True)
+                if item.is_file():
+                    item.unlink()
+                else:
+                    shutil.rmtree(item)
+    else:
+        folder.mkdir(parents=True)
 
 
 def get_sorted_images(folder_path, recursive=False):
@@ -58,3 +59,11 @@ def get_sorted_images(folder_path, recursive=False):
     files = []
     for ext in extensions: files.extend(glob.glob(f"{folder_path}/{ext}", recursive=recursive))
     return natsorted(files)
+
+
+def show_full(img, window_name="Image"):
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, img)
+    cv2.resizeWindow(window_name, 1280, 720)  # fits screen, resizable
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()

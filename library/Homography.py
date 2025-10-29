@@ -47,44 +47,44 @@ def undistort_image(img_bgr, K, dist, alpha: float = 1.0):
 
 # ----------------- Detection -----------------
 
-def detect_checkerboard(img_gray: np.ndarray,
-                        candidate_grids: Iterable[Tuple[int, int]],
-                        use_sb_first: bool = True) -> Optional[Tuple[np.ndarray, Tuple[int,int]]]:
-    """
-    Try multiple inner-corner grid sizes. Return best (corners, (cols, rows)) or None.
-    Prefers findChessboardCornersSB (robust) then classic + subpix.
-    """
-    best = None
-    for (cols, rows) in candidate_grids:
-        pat = (cols, rows)
-        corners = None
-        if use_sb_first:
-            try:
-                ok, corners = cv.findChessboardCornersSB(img_gray, pat,
-flags=cv.CALIB_CB_EXHAUSTIVE | cv.CALIB_CB_ACCURACY)
-                if not ok:
-                    corners = None
-            except Exception:
-                corners = None
-        if corners is None:
-            ok, corners = cv.findChessboardCorners(
-                img_gray, pat,
-                flags=cv.CALIB_CB_ADAPTIVE_THRESH | cv.CALIB_CB_NORMALIZE_IMAGE
-            )
-            if ok:
-                corners = cv.cornerSubPix(
-                    img_gray, corners,
-                    (5, 5), (-1, -1),
-                    (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 50, 1e-3)
-                )
-            else:
-                continue
-
-        if best is None or corners.shape[0] > best[0].shape[0]:
-            best = (corners, pat)
-        if corners.shape[0] == cols * rows:
-            break
-    return best
+# def detect_checkerboard(img_gray: np.ndarray,
+#                         candidate_grids: Iterable[Tuple[int, int]],
+#                         use_sb_first: bool = True) -> Optional[Tuple[np.ndarray, Tuple[int,int]]]:
+#     """
+#     Try multiple inner-corner grid sizes. Return best (corners, (cols, rows)) or None.
+#     Prefers findChessboardCornersSB (robust) then classic + subpix.
+#     """
+#     best = None
+#     for (cols, rows) in candidate_grids:
+#         pat = (cols, rows)
+#         corners = None
+#         if use_sb_first:
+#             try:
+#                 ok, corners = cv.findChessboardCornersSB(img_gray, pat,
+# flags=cv.CALIB_CB_EXHAUSTIVE | cv.CALIB_CB_ACCURACY)
+#                 if not ok:
+#                     corners = None
+#             except Exception:
+#                 corners = None
+#         if corners is None:
+#             ok, corners = cv.findChessboardCorners(
+#                 img_gray, pat,
+#                 flags=cv.CALIB_CB_ADAPTIVE_THRESH | cv.CALIB_CB_NORMALIZE_IMAGE
+#             )
+#             if ok:
+#                 corners = cv.cornerSubPix(
+#                     img_gray, corners,
+#                     (5, 5), (-1, -1),
+#                     (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 50, 1e-3)
+#                 )
+#             else:
+#                 continue
+#
+#         if best is None or corners.shape[0] > best[0].shape[0]:
+#             best = (corners, pat)
+#         if corners.shape[0] == cols * rows:
+#             break
+#     return best
 
 # ----------------- Board model -----------------
 

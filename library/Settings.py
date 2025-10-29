@@ -7,23 +7,22 @@ os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
 cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
 cv.setNumThreads(1)         # Single-threaded (reproducible results)
 
-temp_dir = 'Temp'
 
-lorex_ip = '192.168.1.14'
+lorex_ip = '192.168.1.17'
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}
-# intrinsic_square_mm = 30.0  # size of printed chessboard squares for intrinsics calibration
-# intrinsic_inner_cols = 11
-# intrinsic_inner_rows = 7
 
-intrinsic_dot_diameter_mm = 40.0
-intrinsic_dot_rows = 5
-intrinsic_dot_cols = 10
-intrinsic_dot_spacing = intrinsic_dot_diameter_mm + 10.0
+temp_dir = 'Temp'
 
-homography_square_mm = 30.0  # size of printed chessboard squares for homography
-homography_inner_cols = 11
-homography_inner_rows = 7
+aruco_dict = 'DICT_4X4_100'
+aruco_size = 60
+aruco_forward_axis = 'x'
+aruco_yaw_offset_deg = 0
+
+calibration_dot_diameter_mm = 40.0
+calibration_dot_rows = 5
+calibration_dot_cols = 10
+calibration_dot_spacing = calibration_dot_diameter_mm + 10.0
 homography_mm_per_px = 1.0
 

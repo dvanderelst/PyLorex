@@ -9,11 +9,19 @@ from library import Utils
 from library import CalibIO
 from library import Homography as hg
 
+axis_len_mm = 100.0  # <- new: axis length
+grid_step_mm = 100.0  # <- new: grid spacing
+grid_extent_mm = (-2500, 2500, -2500, 2500)  # <- new: grid bounds
+
 def compose_T(R, t):
     T = np.eye(4, dtype=np.float64)
     T[:3,:3] = R
     T[:3, 3] = t.reshape(3)
     return T
+
+
+def ipt(p):
+    return tuple(np.rint(p).astype(int))
 
 def invert_extrinsics(R, t):
     """Inverse of [R|t] where X_cam = R*X_board + t -> returns board_from_cam."""
@@ -231,7 +239,7 @@ class LorexCamera:
             P = hg.intersect_ray_with_board(d_cam, R, t)
             return float(P[0]), float(P[1])
 
-    def get_aruco(self, draw=False):
+    def get_aruco(self, draw=False, draw_world=True, world_undistort=False):
         # --- Settings ---
         aruco_dict = Settings.aruco_dict  # e.g. "DICT_5X5_100"
         aruco_size = float(Settings.aruco_size)  # mm
@@ -245,16 +253,15 @@ class LorexCamera:
                 print(f"[bundle] Loaded pose bundle for {self.camera_name}")
             except Exception as e:
                 print(f"[bundle] Could not load pose bundle: {e}")
-                # still continue: you can compute yaw/height=None, but pixel→board won't work
                 self.bundle = None
 
+        # --- Acquire RAW frame (detection expects RAW to match K/dist & H_raw) ---
         frame = self.get_frame(undistort=False)
-        if frame is None:
-            return [], None
+        if frame is None: return [], None
 
+        # --- Intrinsics for RAW pixels (scaled to current frame) ---
         K_used, dist_used = self.get_current_intrinsics(frame.shape, undistort=False)
-        if K_used is None:
-            return [], (frame.copy() if draw else None)
+        if K_used is None: return [], (frame.copy() if draw else None)
 
         # --- Board (floor) extrinsics: guard access ---
         R_board_from_cam = None
@@ -273,9 +280,21 @@ class LorexCamera:
 
         # --- Detect (handles both API versions) ---
         corners, ids = detect_markers(aruco, frame, aruco_dict_loaded)
-
         vis = frame.copy() if draw else None
+
+        # --- Optional: draw world axes/grid FIRST so markers/axes both sit on RAW ---
+        if draw and draw_world:
+            if world_undistort:
+                print("[get_aruco] world_undistort=True not supported here; drawing on RAW to match marker overlays.")
+            vis = self.draw_board_axes_and_grid(img=vis, undistort=False, save_to=None)
+
         if ids is None or len(ids) == 0:
+            # Save (if draw) and return early
+            if draw and vis is not None:
+                temp_dir = Settings.temp_dir
+                camera_name = self.camera_name
+                output_file = path.join(temp_dir, f"aruco_{camera_name}.jpg")
+                cv.imwrite(output_file, vis)
             return [], vis
 
         # --- Square object points (TL,TR,BR,BL) in mm ---
@@ -298,7 +317,7 @@ class LorexCamera:
             if not ok:
                 continue
 
-            # Floor (X,Y) at tag center
+            # Floor (X,Y) at tag center via homography (RAW path)
             u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
             X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
 
@@ -326,18 +345,170 @@ class LorexCamera:
             detections.append(det)
 
             if draw and vis is not None:
-                # per-marker overlay is fine…
-                cv.aruco.drawDetectedMarkers(vis, [pts.reshape(1,4,2)], None)
+                # draw markers/axes on RAW geometry
+                cv.aruco.drawDetectedMarkers(vis, [pts.reshape(1, 4, 2)], None)
                 cv.drawFrameAxes(vis, K_used, dist_used, rvec, tvec, 0.25 * aruco_size)
-                label = f"id={tag_id}"
+                label = f"id={tag_id} "
                 if det["yaw_deg"] is not None:
-                    label += f"  yaw={det['yaw_deg']:.1f}dg"
-                if det["height_mm"] is not None:
-                    label += f"  h={det['height_mm']:.0f}mm"
+                    label += f"{det['yaw_deg']:.0f}dg"
+                if det["floor_xy_mm"] is not None:
+                    floor_x = det['floor_xy_mm'][0]
+                    floor_y = det['floor_xy_mm'][1]
+                    label += f" [{floor_x:.0f} {floor_y:.0f}]"
                 cv.putText(vis, label, (int(u) + 8, int(v) - 8),
                            cv.FONT_HERSHEY_SIMPLEX, 0.6, (25, 225, 25), 2, cv.LINE_AA)
-        temp_dir = Settings.temp_dir
-        output_file = path.join(temp_dir, "aruco_overlay.jpg")
-        cv.imwrite(output_file, vis)
-        return detections
 
+        # --- Save debug image if requested ---
+        if draw and vis is not None:
+            temp_dir = Settings.temp_dir
+            camera_name = self.camera_name
+            output_file = path.join(temp_dir, f"aruco_{camera_name}.jpg")
+            cv.imwrite(output_file, vis)
+        return detections, vis
+
+    def draw_board_axes_and_grid(self, img=None, undistort=False, save_to=None):
+        """
+        Draw world (board) XY axes and a Z=0 grid using ONLY the pose bundle.
+        - If undistort=True: undistorts the frame and projects with newK + dist=None,
+          so world straight lines appear straight.
+        - If undistort=False (default): draws on RAW frame; grid is rendered as
+          polylines that follow distortion exactly.
+
+        Returns the resulting image, or None on failure.
+        """
+        draw_grid = True
+        draw_labels = True
+
+        # --- Ensure pose bundle is available -------------------------------------
+        if not self.has_bundle():
+            try:
+                self.load_board_bundle()
+                print(f"[bundle] Loaded pose bundle for {self.camera_name}")
+            except Exception as e:
+                print(f"[axes] Could not load pose bundle: {e}")
+                return None
+
+        b = self.bundle
+        if b is None:
+            print("[axes] No bundle available.")
+            return None
+
+        for k in ("R", "t", "K"):
+            if k not in b:
+                print(f"[axes] Bundle missing '{k}'.")
+                return None
+
+        cam_R_from_board = np.asarray(b["R"], dtype=np.float64)
+        cam_t_from_board = np.asarray(b["t"], dtype=np.float64).reshape(3)
+        K_bundle = np.asarray(b["K"], dtype=np.float64)
+        dist_bundle = None if b.get("dist") is None else np.asarray(b["dist"], dtype=np.float64)
+
+        # Try to get calibration frame size to scale intrinsics to current frame
+        bsize = b.get("frame_size") or b.get("size") or b.get("calib_size")
+        bW = bH = None
+        if isinstance(bsize, (tuple, list)) and len(bsize) == 2: bW, bH = int(bsize[0]), int(bsize[1])
+        # --- Acquire image (always RAW); we handle undistort below ----------------
+        if img is None:
+            img = self.get_frame(undistort=False)
+            if img is None:
+                print("[axes] No image available.")
+                return None
+        h, w = img.shape[:2]
+
+        # --- Scale K from bundle to current frame size ----------------------------
+        K_scaled = K_bundle.copy()
+        if bW and bH and (w != bW or h != bH):
+            sx, sy = w / float(bW), h / float(bH)
+            K_scaled[0, 0] *= sx  # fx
+            K_scaled[0, 2] *= sx  # cx
+            K_scaled[1, 1] *= sy  # fy
+            K_scaled[1, 2] *= sy  # cy
+
+        # --- Optional undistort: use newK + dist=None for all projections --------
+        if undistort:
+            alpha = float(getattr(self, "alpha", 1.0))  # keep FOV by default
+            newK, _ = cv.getOptimalNewCameraMatrix(K_scaled, dist_bundle, (w, h), alpha)
+            img = cv.undistort(img, K_scaled, dist_bundle, None, newK)
+            K_used, dist_used = newK, None
+        else:
+            K_used, dist_used = K_scaled, dist_bundle
+
+        # --- Prepare projection (board -> camera) --------------------------------
+        rvec, _ = cv.Rodrigues(cam_R_from_board)
+        tvec = cam_t_from_board.reshape(3, 1)
+
+        def pj(P):
+            """Project Nx3 board points to image pixels using current K/dist."""
+            P = np.asarray(P, dtype=np.float32).reshape(-1, 1, 3)
+            uv, _ = cv.projectPoints(P, rvec, tvec, K_used, dist_used)
+            return uv.reshape(-1, 2)
+
+        def ipt(p):
+            """Round to nearest pixel for consistent rasterization everywhere."""
+            return tuple(np.rint(np.asarray(p, dtype=np.float32)).astype(int))
+
+        # --- Draw axes on Z=0 (X red, Y green) -----------------------------------
+        axis_len = float(getattr(self, "axis_len_mm", 100.0))
+        O = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+        Xpt = np.array([axis_len, 0.0, 0.0], dtype=np.float32)
+        Ypt = np.array([0.0, axis_len, 0.0], dtype=np.float32)
+
+        Ouv, Xuv, Yuv = pj([O, Xpt, Ypt])
+
+        cv.arrowedLine(img, ipt(Ouv), ipt(Xuv), (0, 0, 255), 2, cv.LINE_AA, tipLength=0.08)  # X
+        cv.arrowedLine(img, ipt(Ouv), ipt(Yuv), (0, 255, 0), 2, cv.LINE_AA, tipLength=0.08)  # Y
+
+        if draw_labels:
+            cv.putText(img, "X", ipt(Xuv), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv.LINE_AA)
+            cv.putText(img, "Y", ipt(Yuv), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv.LINE_AA)
+            cv.putText(img, "Origin", ipt(Ouv + np.array([6, -6], dtype=np.float32)), cv.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1, cv.LINE_AA)
+
+        # --- Draw Z=0 grid as polylines (follow distortion exactly) --------------
+        if draw_grid:
+            xmin, xmax, ymin, ymax = getattr(self, "grid_extent_mm", (-2500, 2500, -2500, 2500))
+            S = float(getattr(self, "grid_step_mm", 100.0))
+            col = (120, 120, 120)
+
+            # grid coordinates
+            xi0 = int(np.ceil(xmin / S));
+            xi1 = int(np.floor(xmax / S))
+            yi0 = int(np.ceil(ymin / S));
+            yi1 = int(np.floor(ymax / S))
+            xs = (np.arange(xi0, xi1 + 1, dtype=int) * S).astype(np.float32)
+            ys = (np.arange(yi0, yi1 + 1, dtype=int) * S).astype(np.float32)
+
+            # sampling density ~32–128 points per line depending on image size
+            npts = max(32, int(0.25 * (h + w) // 50))
+
+            def line_poly(world_start, world_end, n=npts):
+                ws = np.array(world_start, dtype=np.float32)
+                we = np.array(world_end, dtype=np.float32)
+                ts = np.linspace(0.0, 1.0, n, dtype=np.float32)[:, None]
+                pts = ws[None, :] * (1.0 - ts) + we[None, :] * ts  # Nx3
+                uv = pj(pts)  # Nx2
+                return np.rint(uv).astype(np.int32).reshape(-1, 1, 2)
+
+            # vertical lines: x = const
+            for x in xs:
+                poly = line_poly([x, ymin, 0.0], [x, ymax, 0.0])
+                cv.polylines(img, [poly], False, col, 1, cv.LINE_AA)
+
+            # horizontal lines: y = const
+            for y in ys:
+                poly = line_poly([xmin, y, 0.0], [xmax, y, 0.0])
+                cv.polylines(img, [poly], False, col, 1, cv.LINE_AA)
+
+            # emphasize the axes lines (x=0 and y=0) if they fall within the extent
+            hi = (160, 160, 160)
+            if xmin <= 0.0 <= xmax:
+                poly = line_poly([0.0, ymin, 0.0], [0.0, ymax, 0.0])
+                cv.polylines(img, [poly], False, hi, 1, cv.LINE_AA)
+            if ymin <= 0.0 <= ymax:
+                poly = line_poly([xmin, 0.0, 0.0], [xmax, 0.0, 0.0])
+                cv.polylines(img, [poly], False, hi, 1, cv.LINE_AA)
+
+        if save_to is not None:
+            if not cv.imwrite(str(save_to), img):
+                print(f"[axes] Failed to write {save_to}")
+
+        return img
