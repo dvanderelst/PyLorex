@@ -12,16 +12,22 @@ from library import Homography as hg
 
 half = Settings.aruco_size / 2.0
 obj_square = np.array([[-half, half, 0.0],[half, half, 0.0],[half, -half, 0.0],[-half, -half, 0.0]], np.float32)
+red_color = (0, 0, 255)
+green_color = (0, 255, 0)
+label_color = (10, 200, 10)
+grey_color = (240, 240, 240)
+dark_grey_color1 = (120, 120, 120)
+dark_grey_color2 = (160, 160, 160)
 
 def parse_detections(detections):
     detected = detections[0]
     lines = []
     for x in detected:
-        id = x['id']
+        tag_id = x['id']
         x_mm = x['floor_xy_mm'][0]
         y_mm = x['floor_xy_mm'][1]
         yaw_deg = x['yaw_deg']
-        line =[id, x_mm, y_mm, yaw_deg]
+        line =[tag_id, x_mm, y_mm, yaw_deg]
         lines.append(line)
     header = ['id', 'x', 'y', 'yaw']
     if len(lines) > 0:
@@ -135,7 +141,6 @@ def detect_markers(aruco, frame, dict_obj):
     else:
         # Legacy API fallback
         corners, ids, _ = aruco.detectMarkers(gray, dict_obj, parameters=params)
-
     return corners, ids
 
 class LorexCamera:
@@ -182,7 +187,6 @@ class LorexCamera:
     def wait_ready(self, timeout=5.0):
         return self.grabber.wait_latest_bgr(timeout=timeout)
 
-
     def _ensure_maps(self, frame_shape):
         """Build rectification maps if missing or size changed."""
         if self.K is None or self.dist is None: return False
@@ -218,8 +222,7 @@ class LorexCamera:
             else:
                 encode_params = []
         ok = cv.imwrite(str(p), frame, encode_params)
-        if not ok:
-            print(f"[save] Failed writing to {p}")
+        if not ok: print(f"[save] Failed writing to {p}")
         return ok
 
     # ----- convenience helpers -----
@@ -248,12 +251,10 @@ class LorexCamera:
         - If undistort=False: scale K from YAML to this frame size; return dist from YAML.
         - If undistort=True : return the 'newK' for this frame size/alpha; return dist=None (already undistorted).
         """
-        if self.K is None or self.dist is None:
-            return None, None
+        if self.K is None or self.dist is None: return None, None
         h, w = frame_shape[:2]
         if not undistort:
-            if self.calib_size is None:
-                raise RuntimeError("calib_size is None; cannot scale K")
+            if self.calib_size is None: raise RuntimeError("calib_size is None; cannot scale K")
             Wc, Hc = self.calib_size
             sx = w / float(Wc)
             sy = h / float(Hc)
@@ -265,8 +266,7 @@ class LorexCamera:
             return K_used, self.dist
         else:
             # Make sure newK matches this frame size
-            if self.map1 is None or self.map_size != (w, h):
-                self._ensure_maps(frame_shape)
+            if self.map1 is None or self.map_size != (w, h): self._ensure_maps(frame_shape)
             return self.newK, None  # undistorted pixels, so no dist
 
     # -------- homography/pose bundle --------
@@ -275,8 +275,7 @@ class LorexCamera:
         self.bundle = CalibIO.load_pose_bundle(self.camera_name)
         # Basic key sanity
         for k in ("H_raw", "R", "t", "K"):
-            if k not in self.bundle:
-                raise KeyError(f"Pose bundle missing key: {k}")
+            if k not in self.bundle: raise KeyError(f"Pose bundle missing key: {k}")
         return True
 
     def has_bundle(self):
@@ -310,10 +309,6 @@ class LorexCamera:
             return float(P[0]), float(P[1])
 
     def get_aruco(self, draw=False, draw_world=True, world_undistort=False):
-        import numpy as np
-        import cv2 as cv
-        from pathlib import Path
-
         # --- Settings ---
         aruco_dict_name = Settings.aruco_dict_name  # e.g. "DICT_5X5_100"
         aruco_size = float(Settings.aruco_size)  # mm
@@ -331,14 +326,12 @@ class LorexCamera:
 
         # --- Acquire RAW frame (we may undistort it below) ---
         frame = self.get_frame(undistort=False)
-        if frame is None:
-            return [], None
+        if frame is None: return [], None
         h, w = frame.shape[:2]
 
         # --- Intrinsics for RAW pixels (scaled to current frame) ---
         K_used, dist_used = self.get_current_intrinsics(frame.shape, undistort=False)
-        if K_used is None:
-            return [], (frame.copy() if draw else None)
+        if K_used is None: return [], (frame.copy() if draw else None)
 
         # --- If we want rectified world: undistort the frame & switch to newK/dist=None ---
         if draw_world and world_undistort:
@@ -359,10 +352,8 @@ class LorexCamera:
         try:
             aruco_dict_id = getattr(cv.aruco, aruco_dict_name)
         except AttributeError:
-            raise ValueError(f"[aruco] Unknown dictionary: {aruco_dict_name!r}. "
-                             f"Examples: 'DICT_4X4_50', 'DICT_5X5_100', 'DICT_6X6_250'.")
+            raise ValueError(f"[aruco] Unknown dictionary: {aruco_dict_name!r}.")
         aruco_dict = cv.aruco.getPredefinedDictionary(int(aruco_dict_id))
-
         # --- Detect on grayscale (works for both old/new ArUco APIs via your detect_markers wrapper) ---
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         corners, ids = detect_markers(cv.aruco, gray, aruco_dict)
@@ -386,30 +377,18 @@ class LorexCamera:
                 cv.imwrite(out, vis)
             return [], vis
 
-        # --- Prepare solvePnP object points (square corners in tag plane, mm) -----
-        half = aruco_size / 2.0
-        obj_square = np.array(
-            [[-half, half, 0.0],
-             [half, half, 0.0],
-             [half, -half, 0.0],
-             [-half, -half, 0.0]], dtype=np.float32
-        )
-
         detections = []
         for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(-1, 2).astype(np.float32)  # (4,2)
             imgp = pts.reshape(-1, 1, 2)
 
             ok, rvec, tvec = cv.solvePnP(obj_square, imgp, K_used, dist_used, flags=cv.SOLVEPNP_IPPE_SQUARE)
-            if not ok:
-                continue
-
+            if not ok: continue
             # Floor XY at tag center (use RAW-vs-UNDISTORTED consistently)
             u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
             # When frame is rectified (dist_used is None), pixel_to_board_xy should use the rectified homography.
             # If your helper only supports RAW, keep use_raw=True always; otherwise wire a flag on your side.
             X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=(dist_used is not None))
-
             # Orientation & height if extrinsics known
             yaw_deg = None
             height_mm = None
@@ -447,157 +426,8 @@ class LorexCamera:
                 if det["floor_xy_mm"] is not None:
                     fx, fy = det['floor_xy_mm']
                     label += f" [{fx:.0f} {fy:.0f}]"
-                cv.putText(vis, label, (int(u) + 8, int(v) - 8),
-                           cv.FONT_HERSHEY_SIMPLEX, 0.6, (25, 225, 25), 2, cv.LINE_AA)
-
-        # --- Save debug image if requested ---------------------------------------
-        if draw and vis is not None:
-            Path(Settings.temp_dir).mkdir(parents=True, exist_ok=True)
-            out = path.join(Settings.temp_dir, f"aruco_{self.camera_name}.jpg")
-            cv.imwrite(out, vis)
-
-        return detections, vis
-
-    def get_aruco(self, draw=False, draw_world=True, world_undistort=False):
-        import numpy as np
-        import cv2 as cv
-        from pathlib import Path
-
-        # --- Settings ---
-        aruco_dict_name       = Settings.aruco_dict_name   # e.g. "DICT_5X5_100"
-        aruco_size            = float(Settings.aruco_size) # mm
-        aruco_forward_axis    = Settings.aruco_forward_axis  # 'x' or 'y'
-        aruco_yaw_offset_deg  = float(Settings.aruco_yaw_offset_deg)
-
-        # --- Ensure bundle is loaded (for board/world drawing and height/yaw) ---
-        if not self.has_bundle():
-            try:
-                self.load_board_bundle()
-                print(f"[bundle] Loaded pose bundle for {self.camera_name}")
-            except Exception as e:
-                print(f"[bundle] Could not load pose bundle: {e}")
-                self.bundle = None
-
-        # --- Acquire RAW frame (we may undistort it below) ---
-        frame = self.get_frame(undistort=False)
-        if frame is None:
-            return [], None
-        h, w = frame.shape[:2]
-
-        # --- Intrinsics for RAW pixels (scaled to current frame) ---
-        K_used, dist_used = self.get_current_intrinsics(frame.shape, undistort=False)
-        if K_used is None:
-            return [], (frame.copy() if draw else None)
-
-        # --- If we want rectified world: undistort the frame & switch to newK/dist=None ---
-        if draw_world and world_undistort:
-            alpha = float(getattr(self, "alpha", 1.0))
-            newK, _ = cv.getOptimalNewCameraMatrix(K_used, dist_used, (w, h), alpha)
-            frame = cv.undistort(frame, K_used, dist_used, None, newK)
-            K_used, dist_used = newK, None  # <-- active intrinsics are now rectified
-
-        # --- Board (floor) extrinsics: guard access (for yaw & height) ---
-        R_board_from_cam = None
-        t_board_from_cam = None
-        if self.bundle is not None and "R" in self.bundle and "t" in self.bundle:
-            cam_R_from_board = self.bundle["R"]
-            cam_t_from_board = self.bundle["t"].reshape(3)
-            R_board_from_cam, t_board_from_cam = invert_extrinsics(cam_R_from_board, cam_t_from_board)
-
-        # --- ArUco dict (robust string->enum) ---
-        try:
-            aruco_dict_id = getattr(cv.aruco, aruco_dict_name)
-        except AttributeError:
-            raise ValueError(f"[aruco] Unknown dictionary: {aruco_dict_name!r}. "
-                             f"Examples: 'DICT_4X4_50', 'DICT_5X5_100', 'DICT_6X6_250'.")
-        aruco_dict = cv.aruco.getPredefinedDictionary(int(aruco_dict_id))
-
-        # --- Detect on grayscale (works for both old/new ArUco APIs via your detect_markers wrapper) ---
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        corners, ids = detect_markers(cv.aruco, gray, aruco_dict)
-        vis = frame.copy() if draw else None
-
-        # --- Draw world first (in the SAME geometry we're in now) -----------------
-        if draw and draw_world:
-            # We already picked the geometry above by possibly rectifying the frame
-            vis = self.draw_board_axes_and_grid(
-                img=vis,
-                undistort=False,                      # <-- DO NOT undistort again
-                K_used=K_used, dist_used=dist_used,   # <-- use active intrinsics
-                assume_img_rectified=(dist_used is None)  # True when world_undistort=True
-            )
-
-        # --- Early out if no detections ------------------------------------------
-        if ids is None or len(ids) == 0:
-            if draw and vis is not None:
-                Path(Settings.temp_dir).mkdir(parents=True, exist_ok=True)
-                out = path.join(Settings.temp_dir, f"aruco_{self.camera_name}.jpg")
-                cv.imwrite(out, vis)
-            return [], vis
-
-        # --- Prepare solvePnP object points (square corners in tag plane, mm) -----
-        half = aruco_size / 2.0
-        obj_square = np.array(
-            [[-half,  half, 0.0],
-             [ half,  half, 0.0],
-             [ half, -half, 0.0],
-             [-half, -half, 0.0]], dtype=np.float32
-        )
-
-        detections = []
-        for c, tag_id in zip(corners, ids.flatten()):
-            pts = c.reshape(-1, 2).astype(np.float32)         # (4,2)
-            imgp = pts.reshape(-1, 1, 2)
-
-            ok, rvec, tvec = cv.solvePnP(obj_square, imgp, K_used, dist_used, flags=cv.SOLVEPNP_IPPE_SQUARE)
-            if not ok:
-                continue
-
-            # Floor XY at tag center (use RAW-vs-UNDISTORTED consistently)
-            u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
-            # When frame is rectified (dist_used is None), pixel_to_board_xy should use the rectified homography.
-            # If your helper only supports RAW, keep use_raw=True always; otherwise wire a flag on your side.
-            X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=(dist_used is not None))
-
-            # Orientation & height if extrinsics known
-            yaw_deg = None
-            height_mm = None
-            if R_board_from_cam is not None:
-                R_cam_tag, _ = cv.Rodrigues(rvec)
-                t_cam_tag = tvec.reshape(3)
-                R_board_tag = R_board_from_cam @ R_cam_tag
-                t_board_tag = R_board_from_cam @ t_cam_tag + t_board_from_cam
-                # Safe forward-axis handling
-                fa = (aruco_forward_axis or "x").lower()
-                if fa not in ("x", "y"):
-                    print(f"[warn] forward_axis={aruco_forward_axis!r} invalid; using 'x'")
-                    fa = "x"
-                yaw_deg = yaw_from_R_board_tag(R_board_tag, fa, aruco_yaw_offset_deg)
-                height_mm = float(t_board_tag[2])
-
-            det = {
-                "id": int(tag_id),
-                "floor_xy_mm": (float(X_floor), float(Y_floor)),
-                "yaw_deg": None if yaw_deg is None else float(yaw_deg),
-                "height_mm": None if height_mm is None else float(height_mm),
-                "rvec_cam_tag": rvec,
-                "tvec_cam_tag": tvec,
-                "center_px": (u, v),
-                "corners_px": pts.copy(),
-            }
-            detections.append(det)
-
-            if draw and vis is not None:
-                cv.aruco.drawDetectedMarkers(vis, [pts.reshape(1, 4, 2)], None)
-                cv.drawFrameAxes(vis, K_used, dist_used, rvec, tvec, 0.25 * aruco_size)
-                label = f"id={tag_id} "
-                if det["yaw_deg"] is not None:
-                    label += f"{det['yaw_deg']:.0f}dg"
-                if det["floor_xy_mm"] is not None:
-                    fx, fy = det['floor_xy_mm']
-                    label += f" [{fx:.0f} {fy:.0f}]"
-                cv.putText(vis, label, (int(u) + 8, int(v) - 8),
-                           cv.FONT_HERSHEY_SIMPLEX, 0.6, (25, 225, 25), 2, cv.LINE_AA)
+                font = cv.FONT_HERSHEY_SIMPLEX
+                cv.putText(vis, label, (int(u) + 8, int(v) - 8), font, 0.6, label_color, 2, cv.LINE_AA)
 
         # --- Save debug image if requested ---------------------------------------
         if draw and vis is not None:
@@ -628,12 +458,8 @@ class LorexCamera:
 
         Returns: the image (or None on failure).
         """
-        import numpy as np
-        import cv2 as cv
-
         draw_grid = True
         draw_labels = True
-
         # --- Ensure pose bundle is available -------------------------------------
         if not self.has_bundle():
             try:
@@ -717,23 +543,22 @@ class LorexCamera:
         O   = np.array([0.0,       0.0,      0.0 ], dtype=np.float32)
         Xpt = np.array([axis_len,  0.0,      0.0 ], dtype=np.float32)
         Ypt = np.array([0.0,       axis_len, 0.0 ], dtype=np.float32)
-
         Ouv, Xuv, Yuv = pj([O, Xpt, Ypt])
 
-        cv.arrowedLine(img, ipt(Ouv), ipt(Xuv), (0, 0, 255), 2, cv.LINE_AA)  # X
-        cv.arrowedLine(img, ipt(Ouv), ipt(Yuv), (0, 255, 0), 2, cv.LINE_AA)  # Y
+        cv.arrowedLine(img, ipt(Ouv), ipt(Xuv), red_color, 2, cv.LINE_AA)  # X
+        cv.arrowedLine(img, ipt(Ouv), ipt(Yuv), green_color, 2, cv.LINE_AA)  # Y
 
+        font = cv.FONT_HERSHEY_SIMPLEX
         if draw_labels:
-            cv.putText(img, "X", ipt(Xuv), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv.LINE_AA)
-            cv.putText(img, "Y", ipt(Yuv), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv.LINE_AA)
-            cv.putText(img, "Origin", ipt(Ouv + np.array([6, -6], dtype=np.float32)),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1, cv.LINE_AA)
+            cv.putText(img, "X", ipt(Xuv), cv.FONT_HERSHEY_SIMPLEX, 0.6, red_color, 2, cv.LINE_AA)
+            cv.putText(img, "Y", ipt(Yuv), cv.FONT_HERSHEY_SIMPLEX, 0.6, green_color, 2, cv.LINE_AA)
+            cv.putText(img, "Origin", ipt(Ouv + np.array([6, -6], dtype=np.float32)), font , 0.5, grey_color, 1, cv.LINE_AA)
 
         # --- Draw Z=0 grid as polylines (follow distortion exactly when dist_used) -
         if draw_grid:
             xmin, xmax, ymin, ymax = self.grid_extent_mm
             step = float(self.grid_step_mm)
-            col = (120, 120, 120)
+            grey1 = dark_grey_color1
 
             xi0 = int(np.ceil(xmin / step)); xi1 = int(np.floor(xmax / step))
             yi0 = int(np.ceil(ymin / step)); yi1 = int(np.floor(ymax / step))
@@ -754,22 +579,21 @@ class LorexCamera:
             # vertical lines: x = const
             for x in xs:
                 poly = line_poly([x, ymin, 0.0], [x, ymax, 0.0])
-                cv.polylines(img, [poly], False, col, 1, cv.LINE_AA)
+                cv.polylines(img, [poly], False, grey1, 1, cv.LINE_AA)
 
             # horizontal lines: y = const
             for y in ys:
                 poly = line_poly([xmin, y, 0.0], [xmax, y, 0.0])
-                cv.polylines(img, [poly], False, col, 1, cv.LINE_AA)
+                cv.polylines(img, [poly], False, grey1, 1, cv.LINE_AA)
 
             # Emphasize axes lines if in range
-            hi = (160, 160, 160)
+            grey2 = dark_grey_color2
             if xmin <= 0.0 <= xmax:
-                cv.polylines(img, [line_poly([0.0, ymin, 0.0], [0.0, ymax, 0.0])], False, hi, 1, cv.LINE_AA)
+                cv.polylines(img, [line_poly([0.0, ymin, 0.0], [0.0, ymax, 0.0])], False, grey2, 1, cv.LINE_AA)
             if ymin <= 0.0 <= ymax:
-                cv.polylines(img, [line_poly([xmin, 0.0, 0.0], [xmax, 0.0, 0.0])], False, hi, 1, cv.LINE_AA)
+                cv.polylines(img, [line_poly([xmin, 0.0, 0.0], [xmax, 0.0, 0.0])], False, grey2, 1, cv.LINE_AA)
 
         if save_to is not None:
-            if not cv.imwrite(str(save_to), img):
-                print(f"[axes] Failed to write {save_to}")
+            if not cv.imwrite(str(save_to), img): print(f"[axes] Failed to write {save_to}")
 
         return img
