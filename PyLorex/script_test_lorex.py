@@ -48,7 +48,7 @@ if test_nr == 2:
         detections = Lorex.parse_detections(detections)
         end = time.time()
 
-        detections = camera.get_aruco(draw=False, world_undistort=False)
+        detections = camera.get_aruco(detection_scale=0.5, draw=True, world_undistort=False)
         detections = Lorex.parse_detections(detections)
         print(detections)
 
