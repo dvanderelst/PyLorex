@@ -24,7 +24,7 @@ if test_nr == 2:
     for counter in range(5):
         print(counter)
         start = time.time()
-        detections = camera.get_aruco(draw=True, world_undistort=False)
+        detections = camera.get_aruco(draw=False, world_undistort=False)
         detections = Lorex.parse_detections(detections)
         print(detections)
         end = time.time()

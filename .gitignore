@@ -1,10 +1,8 @@
 
 .idea/
 
-Calibration/
-
-library/__pycache__/
-library/voices/
-Temp/
-
-OldStuff/
+PyLorex/Calibration/
+PyLorex/library/__pycache__/
+PyLorex/library/voices/
+PyLorex/Temp/
+PyLorex/OldStuff/
