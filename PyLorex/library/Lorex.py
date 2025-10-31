@@ -322,7 +322,17 @@ class LorexCamera:
             P = hg.intersect_ray_with_board(d_cam, R, t)
             return float(P[0]), float(P[1])
 
-    def get_aruco(self, draw=False, draw_world=True, world_undistort=False):
+    def get_aruco(self, draw=False, draw_world=True, world_undistort=False, detection_scale=0.5, draw_grid=True):
+        """
+        Detect ArUco markers in the camera frame.
+
+        Args:
+            draw: Whether to draw detection results
+            draw_world: Whether to draw world axes and grid
+            world_undistort: Whether to undistort the frame for visualization
+            detection_scale: Scale factor for detection (0.5 = half resolution, faster)
+            draw_grid: Whether to draw the floor grid (can be slow at high res)
+        """
         # --- Settings ---
         aruco_dict_name = Settings.aruco_dict_name  # e.g. "DICT_5X5_100"
         aruco_size = float(Settings.aruco_size)  # mm
@@ -357,6 +367,24 @@ class LorexCamera:
                 # Fallback if maps cannot be built
                 raise RuntimeError("Cannot build undistortion maps.")
 
+        # --- Downsample for detection (major speed boost at high resolutions) ---
+        frame_full = frame  # Keep original for drawing
+        K_full = K_used     # Keep original for solvePnP
+        dist_full = dist_used
+
+        if detection_scale != 1.0:
+            h_det = int(h * detection_scale)
+            w_det = int(w * detection_scale)
+            frame_detect = cv.resize(frame, (w_det, h_det), interpolation=cv.INTER_AREA)
+            K_detect = K_used.copy()
+            K_detect[0, 0] *= detection_scale  # fx
+            K_detect[1, 1] *= detection_scale  # fy
+            K_detect[0, 2] *= detection_scale  # cx
+            K_detect[1, 2] *= detection_scale  # cy
+        else:
+            frame_detect = frame
+            K_detect = K_used
+
         # --- Board (floor) extrinsics: guard access (for yaw & height) ---
         R_board_from_cam = None
         t_board_from_cam = None
@@ -371,10 +399,16 @@ class LorexCamera:
         except AttributeError:
             raise ValueError(f"[aruco] Unknown dictionary: {aruco_dict_name!r}.")
         aruco_dict = cv.aruco.getPredefinedDictionary(int(aruco_dict_id))
-        # --- Detect on grayscale (works for both old/new ArUco APIs via your detect_markers wrapper) ---
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+
+        # --- Detect on downsampled grayscale (major speedup) ---
+        gray = cv.cvtColor(frame_detect, cv.COLOR_BGR2GRAY)
         corners, ids = detect_markers(cv.aruco, gray, aruco_dict)
-        vis = frame.copy() if draw else None
+
+        # --- Scale corners back to full resolution ---
+        if detection_scale != 1.0 and corners is not None and len(corners) > 0:
+            corners = [c / detection_scale for c in corners]
+
+        vis = frame_full.copy() if draw else None
 
         # --- Draw world first (in the SAME geometry we're in now) -----------------
         if draw and draw_world:
@@ -382,8 +416,9 @@ class LorexCamera:
             vis = self.draw_board_axes_and_grid(
                 img=vis,
                 undistort=False,  # <-- DO NOT undistort again
-                K_used=K_used, dist_used=dist_used,  # <-- use active intrinsics
-                assume_img_rectified=(dist_used is None)  # True when world_undistort=True
+                K_used=K_full, dist_used=dist_full,  # <-- use full-res intrinsics (corners are scaled back)
+                assume_img_rectified=(dist_full is None),  # True when world_undistort=True
+                draw_grid=draw_grid  # <-- pass grid drawing preference
             )
 
         # --- Early out if no detections ------------------------------------------
@@ -399,17 +434,17 @@ class LorexCamera:
             pts = c.reshape(-1, 2).astype(np.float32)  # (4,2)
             imgp = pts.reshape(-1, 1, 2)
 
-            ok, rvec, tvec = cv.solvePnP(obj_square, imgp, K_used, dist_used, flags=cv.SOLVEPNP_IPPE_SQUARE)
+            ok, rvec, tvec = cv.solvePnP(obj_square, imgp, K_full, dist_full, flags=cv.SOLVEPNP_IPPE_SQUARE)
             if not ok: continue
             # Floor XY at tag center (use RAW-vs-UNDISTORTED consistently)
             u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
-            # When dist_used is None, frame is undistorted; pass intrinsics to pixel_to_board_xy
-            if dist_used is not None:
+            # When dist_full is None, frame is undistorted; pass intrinsics to pixel_to_board_xy
+            if dist_full is not None:
                 # RAW frame: use fast H_raw homography
                 X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
             else:
                 # Undistorted frame: use ray-plane intersection with correct intrinsics
-                X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=False, K_override=K_used, dist_override=None)
+                X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=False, K_override=K_full, dist_override=None)
             # Orientation & height if extrinsics known
             yaw_deg = None
             height_mm = None
@@ -440,7 +475,7 @@ class LorexCamera:
 
             if draw and vis is not None:
                 cv.aruco.drawDetectedMarkers(vis, [pts.reshape(1, 4, 2)], None)
-                cv.drawFrameAxes(vis, K_used, dist_used, rvec, tvec, 0.25 * aruco_size)
+                cv.drawFrameAxes(vis, K_full, dist_full, rvec, tvec, 0.25 * aruco_size)
                 label = f"id={tag_id} "
                 if det["yaw_deg"] is not None:
                     label += f"{det['yaw_deg']:.0f}dg"
@@ -465,7 +500,8 @@ class LorexCamera:
         save_to=None,
         K_used=None,
         dist_used=None,
-        assume_img_rectified=False
+        assume_img_rectified=False,
+        draw_grid=True
     ):
         """
         Draw world (board) XY axes and a Z=0 grid using ONLY the pose bundle.
@@ -477,9 +513,11 @@ class LorexCamera:
             * undistort=False (default): draw on RAW frame, grid as polylines (follows distortion).
             * undistort=True: undistort the frame and draw with newK, dist=None.
 
+        Args:
+            draw_grid: Whether to draw the floor grid (can be expensive at high resolutions)
+
         Returns: the image (or None on failure).
         """
-        draw_grid = True
         draw_labels = True
         # --- Ensure pose bundle is available -------------------------------------
         if not self.has_bundle():
@@ -595,8 +633,9 @@ class LorexCamera:
             xs = (np.arange(xi0, xi1 + 1, dtype=int) * step).astype(np.float32)
             ys = (np.arange(yi0, yi1 + 1, dtype=int) * step).astype(np.float32)
 
-            # sampling density ~32–128 points per line depending on image size
-            npts = max(32, int(0.25 * (h + w) // 50))
+            # Optimized sampling density: fewer points = faster drawing
+            # 16-32 points sufficient for smooth curves at most resolutions
+            npts = min(32, max(16, int(0.08 * (h + w) // 50)))
 
             def line_poly(world_start, world_end, n=npts):
                 ws = np.array(world_start, dtype=np.float32)
