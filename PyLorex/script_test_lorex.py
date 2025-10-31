@@ -23,11 +23,14 @@ if test_nr == 2:
     camera = Lorex.LorexCamera(camera_name)
     for counter in range(5):
         print(counter)
+        # for timing
         start = time.time()
+        camera.get_aruco(draw=False, world_undistort=False)
+        end = time.time()
+
         detections = camera.get_aruco(draw=False, world_undistort=False)
         detections = Lorex.parse_detections(detections)
-        print(detections)
-        end = time.time()
+
         print(f"Detection time: {(end - start) * 1000:.1f} ms")
         time.sleep(1)
     camera.stop()
