@@ -281,12 +281,15 @@ class LorexCamera:
     def has_bundle(self):
         return hasattr(self, "bundle") and self.bundle is not None
 
-    def pixel_to_board_xy(self, u, v, use_raw=True):
+    def pixel_to_board_xy(self, u, v, use_raw=True, K_override=None, dist_override=None):
         """
         Return board-plane (X,Y) in mm for pixel (u,v).
         - If use_raw=True : assumes (u,v) is from a RAW frame; uses H_raw (fast).
-        - If use_raw=False: ray-plane intersection with PnP pose (works for raw or undistorted,
-                            as long as K/dist match the pixels you queried).
+        - If use_raw=False: assumes (u,v) is from an undistorted frame.
+          * Tries H_undistorted first (fast, if available in bundle).
+          * Falls back to ray-plane intersection with PnP pose.
+          * If K_override/dist_override provided, uses those intrinsics.
+          * Otherwise, derives intrinsics from current frame (assumes RAW).
         """
         if not self.has_bundle():
             raise RuntimeError("No board bundle loaded. Call load_board_bundle().")
@@ -299,11 +302,22 @@ class LorexCamera:
             X, Y = hg.pixel_to_board_xy_raw(u, v, H)
             return float(X), float(Y)
         else:
-            # Match intrinsics to *whatever* pixels you are using for (u,v).
-            # Here we assume RAW for simplicity; switch undistort=True if you query an undistorted frame.
-            frame = self.get_frame(undistort=False)
-            if frame is None: raise RuntimeError("No frame available.")
-            K_used, dist_used = self.get_current_intrinsics(frame.shape, undistort=False)
+            # Undistorted pixels: try fast H_undistorted first
+            if "H_undistorted" in self.bundle:
+                H = self.bundle["H_undistorted"]
+                X, Y = hg.pixel_to_board_xy_raw(u, v, H)
+                return float(X), float(Y)
+
+            # Fallback: ray-plane intersection
+            # Use override intrinsics if provided, otherwise get from current RAW frame
+            if K_override is not None:
+                K_used = K_override
+                dist_used = dist_override
+            else:
+                frame = self.get_frame(undistort=False)
+                if frame is None: raise RuntimeError("No frame available.")
+                K_used, dist_used = self.get_current_intrinsics(frame.shape, undistort=False)
+
             d_cam = hg.pixel_to_ray_cam(u, v, K_used, dist_used)
             P = hg.intersect_ray_with_board(d_cam, R, t)
             return float(P[0]), float(P[1])
@@ -335,10 +349,13 @@ class LorexCamera:
 
         # --- If we want rectified world: undistort the frame & switch to newK/dist=None ---
         if draw_world and world_undistort:
-            alpha = float(getattr(self, "alpha", 1.0))
-            newK, _ = cv.getOptimalNewCameraMatrix(K_used, dist_used, (w, h), alpha)
-            frame = cv.undistort(frame, K_used, dist_used, None, newK)
-            K_used, dist_used = newK, None  # <-- active intrinsics are now rectified
+            # Use _ensure_maps to get consistent newK (respects self.alpha)
+            if self._ensure_maps(frame.shape):
+                frame = cv.remap(frame, self.map1, self.map2, cv.INTER_LINEAR)
+                K_used, dist_used = self.newK, None  # <-- active intrinsics are now rectified
+            else:
+                # Fallback if maps cannot be built
+                raise RuntimeError("Cannot build undistortion maps.")
 
         # --- Board (floor) extrinsics: guard access (for yaw & height) ---
         R_board_from_cam = None
@@ -386,9 +403,13 @@ class LorexCamera:
             if not ok: continue
             # Floor XY at tag center (use RAW-vs-UNDISTORTED consistently)
             u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
-            # When frame is rectified (dist_used is None), pixel_to_board_xy should use the rectified homography.
-            # If your helper only supports RAW, keep use_raw=True always; otherwise wire a flag on your side.
-            X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=(dist_used is not None))
+            # When dist_used is None, frame is undistorted; pass intrinsics to pixel_to_board_xy
+            if dist_used is not None:
+                # RAW frame: use fast H_raw homography
+                X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
+            else:
+                # Undistorted frame: use ray-plane intersection with correct intrinsics
+                X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=False, K_override=K_used, dist_override=None)
             # Orientation & height if extrinsics known
             yaw_deg = None
             height_mm = None
@@ -501,14 +522,23 @@ class LorexCamera:
             pass
         else:
             # Case B: derive from bundle (scale to current frame and optionally undistort)
-            # Try to get calibration frame size to scale intrinsics to current frame
-            bsize = b.get("frame_size") or b.get("size") or b.get("calib_size")
-            bW = bH = None
-            if isinstance(bsize, (tuple, list)) and len(bsize) == 2:
-                bW, bH = int(bsize[0]), int(bsize[1])
+            # Get the frame size that K_bundle corresponds to
+            bsize = b.get("frame_size")  # Now properly loaded from CalibIO
+            if bsize is None:
+                # Fallback: try other possible keys or use calibration size
+                bsize = b.get("size") or b.get("calib_size") or self.calib_size
 
+            if bsize is None:
+                raise RuntimeError(
+                    "[axes] Cannot determine bundle K frame size. "
+                    "Bundle should contain 'frame_size' metadata."
+                )
+
+            bW, bH = int(bsize[0]), int(bsize[1])
+
+            # Scale K_bundle from its native size (bW, bH) to current frame size (w, h)
             K_scaled = K_bundle.copy()
-            if bW and bH and (w != bW or h != bH):
+            if w != bW or h != bH:
                 sx, sy = w / float(bW), h / float(bH)
                 K_scaled[0, 0] *= sx  # fx
                 K_scaled[0, 2] *= sx  # cx
