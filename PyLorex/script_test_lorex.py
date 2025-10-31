@@ -47,7 +47,11 @@ if test_nr == 2:
         )
         detections = Lorex.parse_detections(detections)
         end = time.time()
+
+        detections = camera.get_aruco(draw=False, world_undistort=False)
+        detections = Lorex.parse_detections(detections)
         print(detections)
+
         print(f"Detection time: {(end - start) * 1000:.1f} ms")
         time.sleep(1)
     camera.stop()
