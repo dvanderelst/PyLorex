@@ -5,10 +5,10 @@ os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|max_d
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
 cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
-cv.setNumThreads(1)         # Single-threaded (reproducible results)
+cv.setNumThreads(0)
 
 
-lorex_ip = '192.168.1.16'
+lorex_ip = '192.168.1.17'
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}

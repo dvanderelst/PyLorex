@@ -17,6 +17,21 @@ def load_pose_bundle(camera_name):
             "obj_mm":   data["obj_mm"],
             "corners":  data["corners"],
         }
+        # Load H_undistorted if available (newer calibrations)
+        if "H_undistorted" in data:
+            bundle["H_undistorted"] = data["H_undistorted"]
+        # Load frame_size and alpha from JSON since NPZ doesn't have them
+        try:
+            with open(p["pose_json"], "r") as f:
+                J = json.load(f)
+            if "image_size_WH" in J:
+                bundle["frame_size"] = tuple(J["image_size_WH"])
+            if "alpha" in J:
+                bundle["alpha"] = float(J["alpha"])
+            if "H_undistorted" in J and "H_undistorted" not in bundle:
+                bundle["H_undistorted"] = np.asarray(J["H_undistorted"], dtype=float)
+        except Exception:
+            pass
     except Exception:
         with open(p["pose_json"], "r") as f:
             J = json.load(f)
@@ -27,6 +42,14 @@ def load_pose_bundle(camera_name):
             "R":     np.asarray(J["R_pnp"], dtype=float),
             "t":     np.asarray(J["t_pnp"], dtype=float),
         }
+        # Load H_undistorted if available (newer calibrations)
+        if "H_undistorted" in J:
+            bundle["H_undistorted"] = np.asarray(J["H_undistorted"], dtype=float)
+        # Load frame_size and alpha if available
+        if "image_size_WH" in J:
+            bundle["frame_size"] = tuple(J["image_size_WH"])
+        if "alpha" in J:
+            bundle["alpha"] = float(J["alpha"])
     # convenient derived
     bundle["K_inv"] = np.linalg.inv(bundle["K"])
     return bundle

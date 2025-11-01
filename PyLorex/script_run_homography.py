@@ -71,11 +71,19 @@ obj_xyz = np.concatenate(
 ).astype(np.float32)
 img_pts = corners.reshape(-1, 1, 2).astype(np.float32)
 
-# --- Homography for rectification ---
+# --- Homography for rectification (RAW distorted pixels) ---
 H_raw, _ = hg.estimate_homography(corners, obj_mm)
 width_mm = (dot_cols - 1) * dot_spacing
 height_mm = (dot_rows - 1) * dot_spacing
 rectified = hg.rectify_image(frame, H_raw, width_mm, height_mm, mm_per_px=mm_per_px)
+
+# --- Compute H_undistorted for undistorted pixels (using alpha from settings) ---
+# Undistort the corner points to get their positions in rectified image space
+newK, _ = cv.getOptimalNewCameraMatrix(K_scaled, dist, (w_img, h_img), alpha)
+corners_undistorted = cv.undistortPoints(corners, K_scaled, dist, None, newK)
+# undistortPoints returns normalized coordinates, need to convert to pixel coords
+corners_undistorted = corners_undistorted.reshape(-1, 1, 2).astype(np.float32)
+H_undistorted, _ = hg.estimate_homography(corners_undistorted, obj_mm)
 
 # --- Pose estimation (PnP) ---
 ok, rvec, tvec = cv.solvePnP(obj_xyz, img_pts, K_scaled, dist, flags=cv.SOLVEPNP_EPNP)
@@ -111,6 +119,7 @@ summary = {
     "image_size_WH": [int(w_img), int(h_img)],
     "calib_size_WH": [int(W_calib), int(H_calib)],
     "scale_xy": [float(sx), float(sy)],
+    "alpha": float(alpha),
     "dot_pattern_cols_rows": [int(dot_cols), int(dot_rows)],
     "dot_spacing_mm": float(dot_spacing),
     "mm_per_px_for_rectified": float(mm_per_px),
@@ -119,6 +128,7 @@ summary = {
     "K_scaled": np.asarray(K_scaled).tolist(),
     "dist_coeffs": np.asarray(dist).tolist(),
     "H_raw": np.asarray(H_raw).tolist(),
+    "H_undistorted": np.asarray(H_undistorted).tolist(),
     "R_pnp": np.asarray(R_pnp).tolist(),
     "t_pnp": np.asarray(tvec).tolist(),
     "raw_image": os.path.basename(raw_path),
@@ -132,7 +142,7 @@ with open(pose_json_path, "w") as f:
 
 np.savez_compressed(
     pose_npz_path,
-    K_scaled=K_scaled, dist=dist, H_raw=H_raw,
+    K_scaled=K_scaled, dist=dist, H_raw=H_raw, H_undistorted=H_undistorted,
     R_pnp=R_pnp, t_pnp=tvec,
     obj_mm=obj_mm, obj_xyz=obj_xyz,
     img_pts=img_pts.reshape(-1, 2), corners=corners
