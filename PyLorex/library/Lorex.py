@@ -207,9 +207,11 @@ class LorexCamera:
         if self.aruco_detector is None and hasattr(self.aruco, "ArucoDetector"):
             self.aruco_detector = self.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
 
-    def detect_markers(self, gray):
+    def detect_markers(self, gray, scale_override=None):
         self.ensure_aruco()
-        s = float(self.aruco_detect_scale)
+        s = float(self.aruco_detect_scale if scale_override is None else scale_override)
+        if s <= 0.0:
+            raise ValueError(f"aruco_detect_scale must be > 0, got {s}")
         if s != 1.0:
             small = cv.resize(gray, None, fx=s, fy=s, interpolation=cv.INTER_AREA)
             if self.aruco_detector is not None:
@@ -382,7 +384,7 @@ class LorexCamera:
             P = hg.intersect_ray_with_board(d_cam, R, t)
             return float(P[0]), float(P[1])
 
-    def get_aruco(self, draw=False, draw_world=True, world_undistort=False, detection_scale=0.5, draw_grid=True):
+    def get_aruco(self, draw=False, draw_world=True, world_undistort=False, detection_scale=None, draw_grid=True):
         """
         Detect ArUco markers in the camera frame.
 
@@ -390,7 +392,8 @@ class LorexCamera:
             draw: Whether to draw detection results
             draw_world: Whether to draw world axes and grid
             world_undistort: Whether to undistort the frame for visualization
-            detection_scale: Scale factor for detection (0.5 = half resolution, faster)
+            detection_scale: Optional override for detection scale (0.5 = half resolution, faster).
+                When None, uses Settings.aruco_detect_scale.
             draw_grid: Whether to draw the floor grid (can be slow at high res)
         """
         # --- Settings ---
@@ -416,31 +419,17 @@ class LorexCamera:
 
         # --- Optional rectified world (undistort once, then dist=None) ---
         if draw_world and world_undistort:
-            # Use _ensure_maps to get consistent newK (respects self.alpha)
-            if self._ensure_maps(frame.shape):
+            # Use ensure_maps to get consistent newK (respects self.alpha)
+            if self.ensure_maps(frame.shape):
                 frame = cv.remap(frame, self.map1, self.map2, cv.INTER_LINEAR)
                 K_used, dist_used = self.newK, None  # <-- active intrinsics are now rectified
             else:
                 # Fallback if maps cannot be built
                 raise RuntimeError("Cannot build undistortion maps.")
 
-        # --- Downsample for detection (major speed boost at high resolutions) ---
         frame_full = frame  # Keep original for drawing
         K_full = K_used     # Keep original for solvePnP
         dist_full = dist_used
-
-        if detection_scale != 1.0:
-            h_det = int(h * detection_scale)
-            w_det = int(w * detection_scale)
-            frame_detect = cv.resize(frame, (w_det, h_det), interpolation=cv.INTER_AREA)
-            K_detect = K_used.copy()
-            K_detect[0, 0] *= detection_scale  # fx
-            K_detect[1, 1] *= detection_scale  # fy
-            K_detect[0, 2] *= detection_scale  # cx
-            K_detect[1, 2] *= detection_scale  # cy
-        else:
-            frame_detect = frame
-            K_detect = K_used
 
         # --- Board (floor) extrinsics: guard access (for yaw & height) ---
         R_board_from_cam = None
@@ -450,20 +439,9 @@ class LorexCamera:
             cam_t_from_board = self.bundle["t"].reshape(3)
             R_board_from_cam, t_board_from_cam = invert_extrinsics(cam_R_from_board, cam_t_from_board)
 
-        # --- ArUco dict (robust string->enum) ---
-        try:
-            aruco_dict_id = getattr(cv.aruco, aruco_dict_name)
-        except AttributeError:
-            raise ValueError(f"[aruco] Unknown dictionary: {aruco_dict_name!r}.")
-        aruco_dict = cv.aruco.getPredefinedDictionary(int(aruco_dict_id))
-
-        # --- Detect on downsampled grayscale (major speedup) ---
-        gray = cv.cvtColor(frame_detect, cv.COLOR_BGR2GRAY)
-        corners, ids = detect_markers(cv.aruco, gray, aruco_dict)
-
-        # --- Scale corners back to full resolution ---
-        if detection_scale != 1.0 and corners is not None and len(corners) > 0:
-            corners = [c / detection_scale for c in corners]
+        # --- Detect markers (optionally override detector scale) ---
+        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        corners, ids = self.detect_markers(gray, scale_override=detection_scale)
 
         vis = frame_full.copy() if draw else None
 
@@ -492,7 +470,6 @@ class LorexCamera:
         detections = []
         for c, tag_id in zip(corners, ids.flatten()):
             pts = c.reshape(-1, 2).astype(np.float32)
-            pts = pts / self.aruco_detect_scale
             imgp = pts.reshape(-1, 1, 2)
 
             ok, rvec, tvec = cv.solvePnP(obj_square, imgp, K_full, dist_full, flags=cv.SOLVEPNP_IPPE_SQUARE)
@@ -532,6 +509,8 @@ class LorexCamera:
             if draw and vis is not None:
                 cv.aruco.drawDetectedMarkers(vis, [pts.reshape(1, 4, 2)], None)
                 cv.drawFrameAxes(vis, K_full, dist_full, rvec, tvec, 0.25 * aruco_size)
+                axis_model = np.float32([[0.0, 0.0, 0.0], [Settings.axis_draw_length_mm, 0.0, 0.0]])
+                imgpts, _ = cv.projectPoints(axis_model, rvec, tvec, K_full, dist_full)
                 label = f"id={tag_id} "
                 if det["yaw_deg"] is not None:
                     label += f"{det['yaw_deg']:.0f}dg"
