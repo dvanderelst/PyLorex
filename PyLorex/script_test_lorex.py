@@ -3,23 +3,11 @@ from library import Lorex
 from library import Grabber
 from library import Utils
 
-"""
-Performance tuning for get_aruco():
-- detection_scale=0.5: Detect at 1/2 resolution (4x faster, ~200-300ms at 4K)
-- detection_scale=0.25: Detect at 1/4 resolution (16x faster, ~50-100ms at 4K, may miss small markers)
-- draw_grid=False: Skip grid drawing (saves 50-100ms at high resolutions)
-- world_undistort=False: Skip frame undistortion (saves 100-200ms at 4K)
 
-Typical 4K performance:
-- Baseline (1.0 scale, grid on): ~1000ms
-- Optimized (0.5 scale, grid off): ~200-300ms
-- Aggressive (0.25 scale, grid off): ~50-100ms
-"""
-
-test_nr = 2
+test_nr = 0
 
 if test_nr == 0:
-    grabber = Grabber.RTSPGrabber(2)
+    grabber = Grabber.RTSPGrabber(3)
     f = grabber.show_latest_bgr()
     grabber.stop()
 

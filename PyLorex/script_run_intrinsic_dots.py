@@ -5,7 +5,7 @@ from library import Utils
 from library import Settings
 
 ###########################################################################
-camera_name = 'tiger'
+camera_name = 'shark'
 visual_check = True           # show windows during detection
 save_visualizations = True    # write annotated PNGs to result folder
 ###########################################################################
