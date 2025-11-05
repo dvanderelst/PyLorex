@@ -4,6 +4,28 @@ PyLorex is a Python library designed to interface with Lorex security cameras, a
 
 The library allows for **intrinsic camera calibration** and **homography estimation**, enabling users to correct lens distortion and map camera views to real-world coordinates: With intrinsics and a homography, every pixel can be mapped to an (X, Y) position on that plane. But if the object is not on that plane, the mapping doesn’t hold anymore. Also, this only holds as long **as the camera is not moved**.
 
+# Simple TCP telemetry server
+
+The ``PyLorex.server.simple_tcp`` module offers a lightweight way to share the
+latest ArUco detections with another machine. Run the server on the computer
+that is directly connected to the cameras and poll it from the machine that
+coordinates your robots::
+
+    python -m PyLorex.server.simple_tcp --camera tiger --camera panther
+
+This starts a threaded TCP listener on ``0.0.0.0:9999`` and spawns one worker
+per camera that continuously calls :func:`library.Lorex.LorexCamera.get_aruco`.
+Clients connect via ``telnet``/``nc``/custom code and issue newline-terminated
+commands:
+
+* ``PING`` – sanity check, returns ``{"status": "ok"}``
+* ``CAMERAS`` – list the camera names currently publishing telemetry
+* ``GET <camera>`` – fetch the full snapshot (detections, timestamp, frame size)
+* ``GET <camera> <marker_id>`` – retrieve a single marker dictionary
+
+Each response is returned as one JSON object followed by a newline, making it
+easy to consume from Python, Rust, or any language with basic socket support.
+
 # Scripts
 
 + `script_collect_calibration_images`: Captures a sequence of calibration images from a configured camera and saves them to the project's calibration image folder.
