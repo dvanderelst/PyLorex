@@ -7,7 +7,7 @@ import easygui
 
 # Configuration ######################
 
-camera_name = 'tiger' # The ID of the camera
+camera_name = 'shark' # The ID of the camera
 number_of_images = 15
 #######################################
 
@@ -40,10 +40,10 @@ for counter in range(start_index, end_index):
     image_file = os.path.join(calibration_images_folder, file_name)
     message = f'Capturing image {counter+1} of {end_index}'
     print(message)
-    sounds.play('pips', volume=0.5)
-    sounds.speak(message)
+    sounds.play('pips', volume=0.25)
+    sounds.speak(message, volume=1.0)
     result = camera.save(path=image_file)
-    sounds.play('shutter')
+    sounds.play('shutter', volume=1.0)
 
 print('Done.')
 camera.stop()
