@@ -12,8 +12,9 @@ that is directly connected to the cameras and poll it from the machine that
 coordinates your robots.
 
 For day-to-day usage edit ``script_start_server.py`` in the repository root and
-set the desired camera names, host, port, and other options. By default it
-monitors the ``tiger`` and ``shark`` cameras::
+adjust the configuration constants at the top of the file (camera list, host,
+port, poll interval, etc.). By default it monitors the ``tiger`` and ``shark``
+cameras::
 
     python script_start_server.py
 

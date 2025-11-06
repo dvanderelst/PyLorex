@@ -1,8 +1,8 @@
 """Convenience launcher for the Lorex TCP telemetry server.
 
-Adjust the configuration values in :func:`main` to suit the typical lab
-setup. By default the script starts the tracker on host ``0.0.0.0`` and
-monitors the ``tiger`` and ``shark`` cameras.
+Edit the module-level constants below to match the usual lab setup. This keeps
+the configuration in one obvious place while still allowing you to run the
+script directly via ``python script_start_server.py``.
 """
 
 from __future__ import annotations
@@ -10,17 +10,27 @@ from __future__ import annotations
 from PyLorex.server.simple_tcp import run_server
 
 
+# --- Default lab configuration -------------------------------------------------
+CAMERAS = ("tiger", "shark")
+HOST = "0.0.0.0"
+PORT = 9999
+POLL_INTERVAL = 0.1  # seconds between detection polls
+DETECTION_SCALE = None  # ``None`` -> use camera default
+DRAW_DEBUG = False
+LOG_LEVEL = "INFO"
+
+
 def main() -> None:
     """Start the telemetry server with the lab's usual defaults."""
 
     run_server(
-        cameras=("tiger", "shark"),
-        host="0.0.0.0",
-        port=9999,
-        poll_interval=0.1,
-        detection_scale=None,
-        draw=False,
-        log_level="INFO",
+        cameras=CAMERAS,
+        host=HOST,
+        port=PORT,
+        poll_interval=POLL_INTERVAL,
+        detection_scale=DETECTION_SCALE,
+        draw=DRAW_DEBUG,
+        log_level=LOG_LEVEL,
     )
 
 

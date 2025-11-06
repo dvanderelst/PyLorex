@@ -322,7 +322,10 @@ def run_server(
 ) -> None:
     """Start the telemetry server with an explicit configuration."""
 
-    camera_list = list(cameras)
+    # ``cameras`` is often provided via CLI flags or a config tuple. Convert to a
+    # list while preserving order but de-duplicating entries so we don't spin up
+    # multiple workers for the same feed if the caller repeats a name.
+    camera_list = list(dict.fromkeys(cameras))
     if not camera_list:
         raise ValueError("at least one camera name must be provided")
 
