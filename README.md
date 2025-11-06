@@ -19,7 +19,8 @@ cameras::
     python script_start_server.py
 
 When you need an ad-hoc configuration, you can launch the module directly and
-repeat the ``--camera`` flag for each feed you want to track::
+repeat the ``--camera`` flag for each feed you want to track. Duplicate camera
+names are ignored (the server logs a warning and keeps one worker per name)::
 
     python -m PyLorex.server.simple_tcp --camera tiger --camera panther
 

@@ -325,7 +325,20 @@ def run_server(
     # ``cameras`` is often provided via CLI flags or a config tuple. Convert to a
     # list while preserving order but de-duplicating entries so we don't spin up
     # multiple workers for the same feed if the caller repeats a name.
-    camera_list = list(dict.fromkeys(cameras))
+    original_cameras = list(cameras)
+    camera_list = list(dict.fromkeys(original_cameras))
+    if len(camera_list) < len(original_cameras):
+        duplicates: List[str] = []
+        seen: set[str] = set()
+        for name in original_cameras:
+            if name in seen and name not in duplicates:
+                duplicates.append(name)
+            else:
+                seen.add(name)
+        LOGGER.warning(
+            "Duplicate camera names requested; only launching one worker per name: %s",
+            ", ".join(duplicates),
+        )
     if not camera_list:
         raise ValueError("at least one camera name must be provided")
 
