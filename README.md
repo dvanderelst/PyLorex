@@ -10,6 +10,9 @@ The ``PyLorex.server.simple_tcp`` module offers a lightweight way to share the
 latest ArUco detections with another machine. Run the server on the computer
 that is directly connected to the cameras and poll it from the machine that
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> PyLorex/main
 coordinates your robots::
 
     python -m PyLorex.server.simple_tcp --camera tiger --camera panther
@@ -25,6 +28,7 @@ each of them.
 
 This starts a threaded TCP listener on ``0.0.0.0:9999`` and spawns one worker
 per camera that continuously calls :func:`library.Lorex.LorexCamera.get_aruco`.
+<<<<<<< HEAD
 =======
 coordinates your robots.
 
@@ -49,6 +53,8 @@ one worker per camera that continuously calls
 :func:`library.Lorex.LorexCamera.get_aruco`. The server maintains the most
 recent detections for each camera.
 >>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+>>>>>>> PyLorex/main
 Clients connect via ``telnet``/``nc``/custom code and issue newline-terminated
 commands:
 

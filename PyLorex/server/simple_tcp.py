@@ -29,10 +29,14 @@ import threading
 import time
 from dataclasses import dataclass
 <<<<<<< HEAD
+<<<<<<< HEAD
 from typing import Dict, Iterable, List, Optional, Tuple
 =======
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 >>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+from typing import Dict, Iterable, List, Optional, Tuple
+>>>>>>> PyLorex/main
 
 from library.Lorex import LorexCamera
 
@@ -316,6 +320,9 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> PyLorex/main
 def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
     configure_logging(args.log_level)
@@ -330,6 +337,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     )
 
     server = SimpleTCPServer((args.host, args.port), store)
+<<<<<<< HEAD
 =======
 def run_server(
     cameras: Sequence[str],
@@ -363,6 +371,8 @@ def run_server(
 
     server = SimpleTCPServer((host, port), store)
 >>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+>>>>>>> PyLorex/main
 
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)
@@ -377,10 +387,14 @@ def run_server(
 
     try:
 <<<<<<< HEAD
+<<<<<<< HEAD
         LOGGER.info("Serving on %s:%s", args.host, args.port)
 =======
         LOGGER.info("Serving on %s:%s", host, port)
 >>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+        LOGGER.info("Serving on %s:%s", args.host, args.port)
+>>>>>>> PyLorex/main
         server.serve_forever()
     finally:
         LOGGER.info("Stopping workers")
@@ -388,6 +402,7 @@ def run_server(
         server.server_close()
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
 def main(argv: Optional[Iterable[str]] = None) -> None:
@@ -404,5 +419,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
 
 >>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+>>>>>>> PyLorex/main
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     main()
