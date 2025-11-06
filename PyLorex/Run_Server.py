@@ -29,7 +29,6 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
-
 from library.Lorex import LorexCamera
 
 
