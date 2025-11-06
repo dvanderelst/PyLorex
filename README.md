@@ -13,8 +13,6 @@ coordinates your robots::
 
     python -m PyLorex.server.simple_tcp --camera tiger --camera panther
 
-<<<<<<< ours
-=======
 If you prefer a shorter entry point you can run the compatibility shim at the
 repository root::
 
@@ -24,7 +22,6 @@ Repeat the ``--camera`` flag for every camera name you want to track. The
 server spawns one worker per name and keeps the most recent detections for
 each of them.
 
->>>>>>> theirs
 This starts a threaded TCP listener on ``0.0.0.0:9999`` and spawns one worker
 per camera that continuously calls :func:`library.Lorex.LorexCamera.get_aruco`.
 Clients connect via ``telnet``/``nc``/custom code and issue newline-terminated
