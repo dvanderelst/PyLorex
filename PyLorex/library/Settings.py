@@ -23,7 +23,7 @@ aruco_yaw_offset_deg = 0
 heading_draw_length = 150
 axis_draw_length_mm = 50
 # ArUco speed knobs
-aruco_detect_scale = 0.5      # detect at 50% size, then scale corners back
+aruco_detect_scale = 1      # detect at 50% size, then scale corners back
 aruco_fast_refine = True      # keep subpix but lighter
 aruco_refine_win = 3          # subpix window (3 good at ~46px markers)
 aruco_refine_iters = 10       # fewer iterations than 30
