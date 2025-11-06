@@ -8,7 +8,7 @@ cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
 cv.setNumThreads(0)
 
 
-lorex_ip = '192.168.1.17'
+lorex_ip = '192.168.1.19'
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}

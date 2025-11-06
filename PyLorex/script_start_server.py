@@ -6,14 +6,14 @@ script directly via ``python script_start_server.py``.
 """
 
 from __future__ import annotations
-
-from PyLorex.server.simple_tcp import run_server
+from server.simple_tcp import run_server
+from library import Settings
 
 
 # --- Default lab configuration -------------------------------------------------
 CAMERAS = ("tiger", "shark")
 HOST = "0.0.0.0"
-PORT = 9999
+PORT = 1234
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
