@@ -28,7 +28,15 @@ import socketserver
 import threading
 import time
 from dataclasses import dataclass
+<<<<<<< HEAD
+<<<<<<< HEAD
 from typing import Dict, Iterable, List, Optional, Tuple
+=======
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+>>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+from typing import Dict, Iterable, List, Optional, Tuple
+>>>>>>> PyLorex/main
 
 from library.Lorex import LorexCamera
 
@@ -311,6 +319,10 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
         worker.stop()
 
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> PyLorex/main
 def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
     configure_logging(args.log_level)
@@ -325,6 +337,42 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     )
 
     server = SimpleTCPServer((args.host, args.port), store)
+<<<<<<< HEAD
+=======
+def run_server(
+    cameras: Sequence[str],
+    host: str = "0.0.0.0",
+    port: int = 9999,
+    poll_interval: float = 0.1,
+    detection_scale: Optional[float] = None,
+    draw: bool = False,
+    log_level: Optional[str] = "INFO",
+) -> None:
+    """Start the telemetry server with an explicit configuration."""
+
+    camera_list = list(cameras)
+    if not camera_list:
+        raise ValueError("at least one camera name must be provided")
+
+    if detection_scale is not None and detection_scale <= 0:
+        raise ValueError("detection_scale must be positive")
+
+    if log_level is not None:
+        configure_logging(log_level)
+
+    store = TelemetryStore()
+    workers = start_workers(
+        cameras=camera_list,
+        store=store,
+        poll_interval=poll_interval,
+        detection_scale=detection_scale,
+        draw=draw,
+    )
+
+    server = SimpleTCPServer((host, port), store)
+>>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+>>>>>>> PyLorex/main
 
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)
@@ -338,7 +386,15 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             continue
 
     try:
+<<<<<<< HEAD
+<<<<<<< HEAD
         LOGGER.info("Serving on %s:%s", args.host, args.port)
+=======
+        LOGGER.info("Serving on %s:%s", host, port)
+>>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+        LOGGER.info("Serving on %s:%s", args.host, args.port)
+>>>>>>> PyLorex/main
         server.serve_forever()
     finally:
         LOGGER.info("Stopping workers")
@@ -346,5 +402,24 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         server.server_close()
 
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+def main(argv: Optional[Iterable[str]] = None) -> None:
+    args = parse_args(argv)
+    run_server(
+        cameras=args.cameras,
+        host=args.host,
+        port=args.port,
+        poll_interval=args.interval,
+        detection_scale=args.detection_scale,
+        draw=args.draw,
+        log_level=args.log_level,
+    )
+
+
+>>>>>>> PyLorex/codex/review-code-for-errors-in-lorex.py-ook82k
+=======
+>>>>>>> PyLorex/main
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     main()
