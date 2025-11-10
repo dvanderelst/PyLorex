@@ -29,7 +29,7 @@ DRAW_DEBUG = False
 VERBOSITY = "INFO"
 # Detection timing logs: 0 disables extra prints, otherwise every Nth iteration
 # from each camera worker will emit the timing/marker summary message.
-DETECTION_LOG_EVERY = 0
+DETECTION_LOG_EVERY = 10
 
 
 def main() -> None:
