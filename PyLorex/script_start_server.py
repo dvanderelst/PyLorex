@@ -24,7 +24,9 @@ PORT = Settings.lorex_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
-LOG_LEVEL = "INFO"
+# Adjust the verbosity for the telemetry server. Set to "DEBUG" to see per-frame
+# processing timing in the console while leaving the default at a quieter level.
+VERBOSITY = "INFO"
 
 
 def main() -> None:
@@ -38,7 +40,7 @@ def main() -> None:
             poll_interval=POLL_INTERVAL,
             detection_scale=DETECTION_SCALE,
             draw=DRAW_DEBUG,
-            log_level=LOG_LEVEL,
+            log_level=VERBOSITY,
         )
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)

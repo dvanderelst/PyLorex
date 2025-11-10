@@ -191,6 +191,16 @@ class CameraWorker(threading.Thread):
                         frame_size=cam.calib_size,
                     )
                     self.store.update(snapshot)
+                    duration_s = time.time() - start
+                    duration_ms = duration_s * 1000.0
+                    if duration_ms >= 0.0:
+                        frequency_hz = (1.0 / duration_s) if duration_s > 0 else float("inf")
+                        LOGGER.debug(
+                            "Camera %s processed frame in %.1f ms (%.1f Hz)",
+                            self.camera_name,
+                            duration_ms,
+                            frequency_hz,
+                        )
                 except Exception as exc:  # noqa: BLE001 - worker must stay alive
                     LOGGER.exception("Detection loop for camera %s failed", self.camera_name)
                     self.store.update_error(self.camera_name, str(exc))
