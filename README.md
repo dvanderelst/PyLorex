@@ -9,21 +9,30 @@ The library allows for **intrinsic camera calibration** and **homography estimat
 The ``PyLorex.server.simple_tcp`` module offers a lightweight way to share the
 latest ArUco detections with another machine. Run the server on the computer
 that is directly connected to the cameras and poll it from the machine that
-coordinates your robots::
+coordinates your robots.
+
+For day-to-day usage edit ``script_start_server.py`` in the repository root and
+adjust the configuration constants at the top of the file (camera list, host,
+port, poll interval, etc.). By default it monitors the ``tiger`` and ``shark``
+cameras::
+
+    python script_start_server.py
+
+When you need an ad-hoc configuration, you can launch the module directly and
+repeat the ``--camera`` flag for each feed you want to track. Duplicate camera
+names are ignored (the server logs a warning and keeps one worker per name)::
 
     python -m PyLorex.server.simple_tcp --camera tiger --camera panther
 
-If you prefer a shorter entry point you can run the compatibility shim at the
-repository root::
+The repository also includes a compatibility shim that forwards to the module
+entry point while still accepting all CLI flags::
 
     python run_server.py --camera tiger --camera panther
 
-Repeat the ``--camera`` flag for every camera name you want to track. The
-server spawns one worker per name and keeps the most recent detections for
-each of them.
-
-This starts a threaded TCP listener on ``0.0.0.0:9999`` and spawns one worker
-per camera that continuously calls :func:`library.Lorex.LorexCamera.get_aruco`.
+All entry points start a threaded TCP listener on ``0.0.0.0:9999`` and spawn
+one worker per camera that continuously calls
+:func:`library.Lorex.LorexCamera.get_aruco`. The server maintains the most
+recent detections for each camera.
 Clients connect via ``telnet``/``nc``/custom code and issue newline-terminated
 commands:
 
@@ -42,6 +51,7 @@ easy to consume from Python, Rust, or any language with basic socket support.
 + `script_assess_calibration`: Assesses the quality of a camera calibration. Generates an HTML report.
 + `script_homohraphy`: Uses an image to estimate a homography from image pixels to a known planar target. Saves the homography and a visualization.
 + `script_test_lorex`: Tests getting images from a Lorex camera and undistorting them using previously saved camera intrinsics.
++ `script_start_server`: Launches the TCP telemetry server with the lab's usual configuration (edit the script to change cameras or networking settings).
 
 # Example
 

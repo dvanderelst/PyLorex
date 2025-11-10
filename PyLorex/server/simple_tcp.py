@@ -28,7 +28,7 @@ import socketserver
 import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from library.Lorex import LorexCamera
 
@@ -311,20 +311,53 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
         worker.stop()
 
 
-def main(argv: Optional[Iterable[str]] = None) -> None:
-    args = parse_args(argv)
-    configure_logging(args.log_level)
+def run_server(
+    cameras: Sequence[str],
+    host: str = "0.0.0.0",
+    port: int = 9999,
+    poll_interval: float = 0.1,
+    detection_scale: Optional[float] = None,
+    draw: bool = False,
+    log_level: Optional[str] = "INFO",
+) -> None:
+    """Start the telemetry server with an explicit configuration."""
+
+    # ``cameras`` is often provided via CLI flags or a config tuple. Convert to a
+    # list while preserving order but de-duplicating entries so we don't spin up
+    # multiple workers for the same feed if the caller repeats a name.
+    original_cameras = list(cameras)
+    camera_list = list(dict.fromkeys(original_cameras))
+    if len(camera_list) < len(original_cameras):
+        duplicates: List[str] = []
+        seen: set[str] = set()
+        for name in original_cameras:
+            if name in seen and name not in duplicates:
+                duplicates.append(name)
+            else:
+                seen.add(name)
+        LOGGER.warning(
+            "Duplicate camera names requested; only launching one worker per name: %s",
+            ", ".join(duplicates),
+        )
+    if not camera_list:
+        raise ValueError("at least one camera name must be provided")
+
+    if detection_scale is not None and detection_scale <= 0:
+        raise ValueError("detection_scale must be positive")
+
+    if log_level is not None:
+        configure_logging(log_level)
 
     store = TelemetryStore()
     workers = start_workers(
-        cameras=args.cameras,
+        cameras=camera_list,
         store=store,
-        poll_interval=args.interval,
-        detection_scale=args.detection_scale,
-        draw=args.draw,
+        poll_interval=poll_interval,
+        detection_scale=detection_scale,
+        draw=draw,
     )
 
-    server = SimpleTCPServer((args.host, args.port), store)
+    server = SimpleTCPServer((host, port), store)
 
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)
@@ -338,12 +371,25 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             continue
 
     try:
-        LOGGER.info("Serving on %s:%s", args.host, args.port)
+        LOGGER.info("Serving on %s:%s", host, port)
         server.serve_forever()
     finally:
         LOGGER.info("Stopping workers")
         stop_workers(workers)
         server.server_close()
+
+
+def main(argv: Optional[Iterable[str]] = None) -> None:
+    args = parse_args(argv)
+    run_server(
+        cameras=args.cameras,
+        host=args.host,
+        port=args.port,
+        poll_interval=args.interval,
+        detection_scale=args.detection_scale,
+        draw=args.draw,
+        log_level=args.log_level,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
