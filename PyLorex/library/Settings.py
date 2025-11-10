@@ -7,8 +7,7 @@ os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
 cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
 cv.setNumThreads(0)
 
-tracking_server_ip = '127.168.1.3'
-#tracking_server_ip = '127.0.0.1'
+tracking_server_ip = '192.168.1.3'
 
 lorex_ip = '192.168.1.19'
 lorex_server_port = 1234

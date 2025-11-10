@@ -43,6 +43,8 @@ if test_nr == 3:
 
 if test_nr == 4:
     client = ServerClient.TelemetryClient()
+    result = client.ping()
+    print(result)
     cameras = client.list_cameras()
     print(cameras)
     for i in range(iterations):

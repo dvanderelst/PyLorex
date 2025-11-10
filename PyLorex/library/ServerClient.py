@@ -177,6 +177,7 @@ class TelemetryClient:
     # ------------------------------------------------------------------
     # Internal helpers
     def _request(self, command: str) -> Dict[str, Any]:
+        print('here', self.host, self.port)
         with socket.create_connection((self.host, self.port), timeout=self.timeout) as sock:
             sock.sendall(command.encode("utf-8") + b"\n")
             data = self._readline(sock)
