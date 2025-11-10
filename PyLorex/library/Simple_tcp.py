@@ -22,7 +22,8 @@ simpler command line.
 """
 
 from __future__ import annotations
-
+import signal
+import sys
 import argparse
 import errno
 import json
@@ -432,8 +433,13 @@ def run_server(
 
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)
-        server.shutdown()
+        server.shutdown()  # Stop accepting new connections
+        server.server_close()  # Close the server socket
+        stop_workers(workers)  # Stop background workers
+        LOGGER.info("Server and workers stopped")
+        sys.exit(0)  # Force the script to exit
 
+    # Register signal handlers
     for signame in ("SIGINT", "SIGTERM"):
         try:
             signal.signal(getattr(signal, signame), lambda _sig, _frame, s=signame: shutdown(s))
@@ -441,14 +447,18 @@ def run_server(
             # Some systems (e.g., Windows) may not support all signals.
             continue
 
+    # Start the server
     try:
-        #LOGGER.info("Serving on %s:%s", host, port)
         LOGGER.info("Serving on port %s", port)
         server.serve_forever()
+    except Exception as e:
+        LOGGER.error("Server error: %s", e)
     finally:
-        LOGGER.info("Stopping workers")
-        stop_workers(workers)
+        # This block is redundant if shutdown() already calls server.server_close() and stop_workers()
+        # But it's a good practice to ensure cleanup even if an unhandled exception occurs
+        LOGGER.info("Ensuring cleanup")
         server.server_close()
+        stop_workers(workers)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
