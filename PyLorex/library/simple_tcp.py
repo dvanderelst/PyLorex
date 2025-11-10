@@ -36,7 +36,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from PyLorex.library import Settings
 from PyLorex.library.Lorex import LorexCamera
-
+import numpy as np
 
 LOGGER = logging.getLogger("pylorex.simple_tcp")
 
@@ -73,11 +73,11 @@ def _json_safe(value):
     if isinstance(value, tuple):
         return [_json_safe(item) for item in value]
 
-    if _np is not None:
-        if isinstance(value, _np.ndarray):
-            return _json_safe(value.tolist())
-        if isinstance(value, _np.generic):
-            return value.item()
+
+    if isinstance(value, np.ndarray):
+        return _json_safe(value.tolist())
+    if isinstance(value, np.generic):
+        return value.item()
 
     tolist = getattr(value, "tolist", None)
     if callable(tolist):
