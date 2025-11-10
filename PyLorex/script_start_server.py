@@ -26,7 +26,7 @@ DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
 # Adjust the verbosity for the telemetry server. Set to "DEBUG" to see per-frame
 # processing timing in the console while leaving the default at a quieter level.
-VERBOSITY = "INFO"
+VERBOSITY = "DEBUG"
 
 
 def main() -> None:
