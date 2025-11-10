@@ -8,7 +8,7 @@ test_nr = 4
 
 channel_nr = 2
 camera_name = 'tiger'
-iterations = 1
+iterations = 10
 
 if test_nr == 0:
     grabber = Grabber.RTSPGrabber(channel_nr)

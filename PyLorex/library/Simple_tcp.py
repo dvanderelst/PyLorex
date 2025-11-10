@@ -287,6 +287,7 @@ class SimpleTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __init__(self, server_address: Tuple[str, int], store: TelemetryStore) -> None:
         super().__init__(server_address, SimpleTCPHandler)
         self.store = store
+        self._stop = threading.Event()
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -434,6 +435,7 @@ def run_server(
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)
         server.shutdown()  # Stop accepting new connections
+        server._stop.set()  # Signal the handler loop to exit
         server.server_close()  # Close the server socket
         stop_workers(workers)  # Stop background workers
         LOGGER.info("Server and workers stopped")
@@ -454,11 +456,9 @@ def run_server(
     except Exception as e:
         LOGGER.error("Server error: %s", e)
     finally:
-        # This block is redundant if shutdown() already calls server.server_close() and stop_workers()
-        # But it's a good practice to ensure cleanup even if an unhandled exception occurs
+        # Ensure cleanup
         LOGGER.info("Ensuring cleanup")
         server.server_close()
-        stop_workers(workers)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
