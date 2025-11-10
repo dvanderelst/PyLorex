@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 
 from library import Settings
+from library import Utils
 from library.simple_tcp import run_server
 
 
@@ -45,4 +46,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
+    current_ip = Utils.get_local_ip()
+    print(f"Starting Lorex telemetry server on {current_ip}:{PORT} ...")
     main()

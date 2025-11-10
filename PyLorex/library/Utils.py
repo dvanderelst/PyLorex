@@ -4,7 +4,18 @@ import cv2
 import shutil
 import glob
 from natsort import natsorted
+import socket
 
+def get_local_ip():
+    try:
+        # Create a socket connection to a dummy address to find the local IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # Google's public DNS server
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception as e:
+        return f"Unable to get local IP: {e}"
 
 def get_calibration_paths(camera_name):
     camera_name = str(camera_name)
