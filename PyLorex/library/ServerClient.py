@@ -116,6 +116,7 @@ class TelemetryClient:
                 x += shark2tiger_delta_x
                 y += shark2tiger_delta_y
             processed[id] = [camera_name, id, x, y, yaw]
+        processed['raw'] = info
         return processed
 
     def get_raw_trackers(self) -> List[CameraSnapshot]:
