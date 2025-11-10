@@ -11,6 +11,7 @@ Protocol (newline terminated ASCII commands)::
     CAMERAS\n                       -> {"cameras": ["name", ...]}\n
     GET <camera>\n                 -> latest snapshot for camera\n
     GET <camera> <id>\n            -> single marker entry (or error)\n
+    GETALL\n                      -> snapshots for every known camera\n
 Each response is a single JSON object followed by a newline.
 
 Run ``python -m PyLorex.library.simple_tcp --camera tiger`` to start a
@@ -23,6 +24,7 @@ simpler command line.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import logging
 import signal
@@ -32,8 +34,9 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from PyLorex.library import Settings
 from PyLorex.library.Lorex import LorexCamera
-
+import numpy as np
 
 LOGGER = logging.getLogger("pylorex.simple_tcp")
 
@@ -57,7 +60,40 @@ class CameraSnapshot:
         }
         if self.error is not None:
             payload["error"] = self.error
-        return payload
+        return _json_safe(payload)
+
+
+def _json_safe(value):
+    """Return *value* converted to plain Python types for JSON encoding."""
+
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+
+
+    if isinstance(value, np.ndarray):
+        return _json_safe(value.tolist())
+    if isinstance(value, np.generic):
+        return value.item()
+
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        try:
+            return _json_safe(tolist())
+        except Exception:  # pragma: no cover - fall back if conversion fails
+            pass
+
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return item()
+        except Exception:  # pragma: no cover - fall back if conversion fails
+            pass
+
+    return value
 
 
 class TelemetryStore:
@@ -88,6 +124,10 @@ class TelemetryStore:
     def get(self, camera: str) -> Optional[CameraSnapshot]:
         with self._lock:
             return self._snapshots.get(camera)
+
+    def get_all(self) -> List[CameraSnapshot]:
+        with self._lock:
+            return [self._snapshots[name] for name in sorted(self._snapshots.keys())]
 
     def get_marker(self, camera: str, marker_id: int) -> Optional[dict]:
         snapshot = self.get(camera)
@@ -200,6 +240,9 @@ class SimpleTCPHandler(socketserver.StreamRequestHandler):
             return {"status": "ok", "time": time.time()}
         if keyword == "CAMERAS":
             return {"cameras": self.server.store.list_cameras()}
+        if keyword == "GETALL":
+            snapshots = [snap.to_payload() for snap in self.server.store.get_all()]
+            return {"snapshots": snapshots}
         if keyword == "GET":
             if len(parts) < 2:
                 return {"error": "usage: GET <camera> [marker_id]"}
@@ -226,6 +269,7 @@ class SimpleTCPHandler(socketserver.StreamRequestHandler):
                 "commands": [
                     "PING",
                     "CAMERAS",
+                    "GETALL",
                     "GET <camera>",
                     "GET <camera> <marker_id>",
                 ]
@@ -253,8 +297,21 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         required=True,
         help="Camera name to track (can repeat)",
     )
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=9999, help="Bind port (default: 9999)")
+    parser.add_argument(
+        "--host",
+        default=Settings.tracking_server_ip,
+        help=(
+            "Bind host (default: "
+            f"{Settings.tracking_server_ip}). Use 0.0.0.0 to listen on all interfaces "
+            "if this machine should accept remote clients."
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=Settings.lorex_server_port,
+        help=f"Bind port (default: {Settings.lorex_server_port})",
+    )
     parser.add_argument(
         "--interval",
         type=float,
@@ -315,8 +372,8 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
 
 def run_server(
     cameras: Sequence[str],
-    host: str = "0.0.0.0",
-    port: int = 9999,
+    host: str = Settings.tracking_server_ip,
+    port: int = Settings.lorex_server_port,
     poll_interval: float = 0.1,
     detection_scale: Optional[float] = None,
     draw: bool = False,
@@ -359,7 +416,17 @@ def run_server(
         draw=draw,
     )
 
-    server = SimpleTCPServer((host, port), store)
+    try:
+        server = SimpleTCPServer((host, port), store)
+    except OSError as exc:
+        if exc.errno == errno.EADDRNOTAVAIL:
+            raise RuntimeError(
+                "The telemetry server could not bind to "
+                f"{host}:{port}. The configured host must be an IP address assigned "
+                "to this machine. Update Settings.tracking_server_ip or pass --host "
+                "when starting the server to choose a reachable interface."
+            ) from exc
+        raise
 
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)

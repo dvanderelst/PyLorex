@@ -3,12 +3,13 @@ from library import Lorex
 from library import Grabber
 from library import Utils
 from library import ServerClient
+from library import Settings
 
-test_nr = 2
+test_nr = 4
+
 channel_nr = 2
 camera_name = 'tiger'
-iterations = 10
-
+iterations = 1
 
 if test_nr == 0:
     grabber = Grabber.RTSPGrabber(channel_nr)
@@ -42,4 +43,24 @@ if test_nr == 3:
     Utils.show_full(image)
 
 if test_nr == 4:
+    client = ServerClient.TelemetryClient()
+    cameras = client.list_cameras()
+    print(cameras)
+    for i in range(iterations):
+        info = client.get_all_trackers()
+        print(info)
+        time.sleep(1)
+
+
+
+
+
+
+
+
+
+
+
+
+
 

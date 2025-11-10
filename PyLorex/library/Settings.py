@@ -7,9 +7,11 @@ os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
 cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
 cv.setNumThreads(0)
 
+tracking_server_ip = '127.0.0.1'
 
 lorex_ip = '192.168.1.19'
 lorex_server_port = 1234
+
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}
@@ -41,3 +43,7 @@ calibration_dot_spacing = calibration_dot_diameter_mm + 10.0
 # Setting 1.0 makes the rectified image 1 px = 1 mm, i.e., a 1000 mm square becomes 1000 × 1000 px.
 homography_mm_per_px = 1.0
 
+# This converts the coordinates from the shark camera to the tiger camera frame.
+# This assumes that the coordinates frames are only translated.
+shark2tiger_delta_x = 0
+shark2tiger_delta_y = 0

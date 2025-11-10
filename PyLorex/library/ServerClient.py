@@ -7,6 +7,8 @@ import socket
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from PyLorex.library import Settings
+
 __all__ = ["TelemetryClient", "TelemetryError", "MarkerDetection", "CameraSnapshot"]
 
 
@@ -41,7 +43,12 @@ class CameraSnapshot:
 class TelemetryClient:
     """Simple polling client for the :mod:`PyLorex.library.simple_tcp` service."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 9999, timeout: float = 5.0) -> None:
+    def __init__(
+        self,
+        host: str = Settings.tracking_server_ip,
+        port: int = Settings.lorex_server_port,
+        timeout: float = 5.0,
+    ) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout
@@ -81,6 +88,80 @@ class TelemetryClient:
             frame_size=frame_size,
             error=payload.get("error"),
         )
+
+    def get_trackers(self):
+        processed = {}
+        info = self.get_raw_trackers()
+        shark2tiger_delta_x = Settings.shark2tiger_delta_x
+        shark2tiger_delta_y = Settings.shark2tiger_delta_y
+        for camera_data in info:
+            camera_name = camera_data.camera
+            for detection in camera_data.detections:
+                id = detection.data['id']
+                new_raw_x = detection.data['floor_xy_mm'][0]
+                new_raw_y = detection.data['floor_xy_mm'][1]
+                new_yaw = detection.data['yaw_deg']
+                already_present = id in processed.keys()
+                if already_present: processed[id] = [camera_name, id, new_raw_x, new_raw_y, new_yaw]
+                else:
+                    existing_raw_x = processed[id][2]
+                    existing_raw_y = processed[id][3]
+                    existing_center_distance = (existing_raw_x ** 2 + existing_raw_y ** 2) ** 0.5
+                    new_center_distance = (new_raw_x ** 2 + new_raw_y ** 2) ** 0.5
+                    if new_center_distance < existing_center_distance:
+                        processed[id] = [camera_name, id, new_raw_x, new_raw_y, new_yaw]
+        for id in processed.keys():
+            camera_name, id, x, y, yaw = processed[id]
+            if camera_name == 'shark':
+                x += shark2tiger_delta_x
+                y += shark2tiger_delta_y
+            processed[id] = [camera_name, id, x, y, yaw]
+        processed['raw'] = info
+        return processed
+
+    def get_raw_trackers(self) -> List[CameraSnapshot]:
+        """Return the latest snapshots for every camera."""
+
+        payload = self._request("GETALL")
+        snapshots = payload.get("snapshots")
+        if not isinstance(snapshots, list):
+            raise TelemetryError("response missing 'snapshots' list")
+
+        results: List[CameraSnapshot] = []
+        for entry in snapshots:
+            if not isinstance(entry, dict):
+                raise TelemetryError("snapshot payload must be an object")
+
+            camera = entry.get("camera")
+            if camera is None:
+                raise TelemetryError("snapshot missing 'camera'")
+
+            raw_detections = entry.get("detections", [])
+            if not isinstance(raw_detections, list):
+                raise TelemetryError("snapshot contains invalid 'detections'")
+            detections = [MarkerDetection(det) for det in raw_detections]
+
+            frame_size_value = entry.get("frame_size")
+            frame_size: Optional[tuple[int, int]] = None
+            if frame_size_value is not None:
+                if (
+                    not isinstance(frame_size_value, (list, tuple))
+                    or len(frame_size_value) != 2
+                ):
+                    raise TelemetryError("snapshot contains invalid 'frame_size'")
+                frame_size = (int(frame_size_value[0]), int(frame_size_value[1]))
+
+            results.append(
+                CameraSnapshot(
+                    camera=str(camera),
+                    captured_at=float(entry.get("captured_at", 0.0)),
+                    detections=detections,
+                    frame_size=frame_size,
+                    error=entry.get("error"),
+                )
+            )
+
+        return results
 
     def get_marker(self, camera: str, marker_id: int) -> MarkerDetection:
         """Return a single marker detection."""
