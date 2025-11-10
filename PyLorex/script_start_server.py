@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import sys
 
-from PyLorex.library import Settings
-from PyLorex.library.simple_tcp import run_server
+from library import Settings
+from library.simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------

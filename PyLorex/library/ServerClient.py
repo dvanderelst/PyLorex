@@ -101,22 +101,23 @@ class TelemetryClient:
                 new_raw_x = detection.data['floor_xy_mm'][0]
                 new_raw_y = detection.data['floor_xy_mm'][1]
                 new_yaw = detection.data['yaw_deg']
-                already_present = id in processed.keys()
-                if already_present: processed[id] = [camera_name, id, new_raw_x, new_raw_y, new_yaw]
+                new_entry = not id in processed.keys()
+                if new_entry:
+                    processed[id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
                 else:
-                    existing_raw_x = processed[id][2]
-                    existing_raw_y = processed[id][3]
+                    existing_raw_x = processed[id][1]
+                    existing_raw_y = processed[id][2]
                     existing_center_distance = (existing_raw_x ** 2 + existing_raw_y ** 2) ** 0.5
                     new_center_distance = (new_raw_x ** 2 + new_raw_y ** 2) ** 0.5
                     if new_center_distance < existing_center_distance:
-                        processed[id] = [camera_name, id, new_raw_x, new_raw_y, new_yaw]
+                        processed[id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
         for id in processed.keys():
             camera_name, id, x, y, yaw = processed[id]
             if camera_name == 'shark':
                 x += shark2tiger_delta_x
                 y += shark2tiger_delta_y
-            processed[id] = [camera_name, id, x, y, yaw]
-        processed['raw'] = info
+            processed[id] = [camera_name, x, y, yaw]
+        processed['raw_tracker_data'] = info
         return processed
 
     def get_raw_trackers(self) -> List[CameraSnapshot]:

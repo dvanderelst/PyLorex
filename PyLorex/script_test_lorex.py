@@ -47,7 +47,7 @@ if test_nr == 4:
     cameras = client.list_cameras()
     print(cameras)
     for i in range(iterations):
-        info = client.get_all_trackers()
+        info = client.get_trackers()
         print(info)
         time.sleep(1)
 
