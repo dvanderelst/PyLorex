@@ -417,13 +417,15 @@ def run_server(
     )
 
     try:
-        server = SimpleTCPServer((host, port), store)
+        # Bind to '0.0.0.0' to accept connections from all interfaces
+        server = SimpleTCPServer(('0.0.0.0', port), store)
+        LOGGER.info("Serving on 0.0.0.0:%s (accessible via %s)", port, host)
     except OSError as exc:
         if exc.errno == errno.EADDRNOTAVAIL:
             raise RuntimeError(
                 "The telemetry server could not bind to "
-                f"{host}:{port}. The configured host must be an IP address assigned "
-                "to this machine. Update Settings.tracking_server_ip or pass --host "
+                f"0.0.0.0:{port}. The server is configured to listen on all interfaces. "
+                f"Clients should connect using {host}:{port}. Update Settings.tracking_server_ip or pass --host "
                 "when starting the server to choose a reachable interface."
             ) from exc
         raise
