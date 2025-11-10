@@ -26,8 +26,8 @@ names are ignored (the server logs a warning and keeps one worker per name)::
 
     python -m PyLorex.library.server.simple_tcp --camera tiger --camera panther
 
-The repository also includes a compatibility shim that forwards to the module
-entry point while still accepting all CLI flags::
+The repository also includes ``run_server.py`` as a thin wrapper around the
+module entry point if you prefer a shorter command::
 
     python run_server.py --camera tiger --camera panther
 

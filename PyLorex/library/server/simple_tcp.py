@@ -15,9 +15,9 @@ Each response is a single JSON object followed by a newline.
 
 Run ``python -m PyLorex.library.server.simple_tcp --camera tiger`` to start a
 server that tracks the camera named ``tiger`` using the settings from
-:mod:`PyLorex.library.Settings`. The legacy
-``python -m PyLorex.server.simple_tcp`` entry point remains available as a
-shim for existing scripts.
+:mod:`PyLorex.library.Settings`. You can also use the convenience wrappers in
+the repository root (``script_start_server.py`` or ``run_server.py``) if you
+prefer a simpler command line.
 """
 
 from __future__ import annotations
