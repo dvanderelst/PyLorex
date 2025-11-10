@@ -89,7 +89,36 @@ class TelemetryClient:
             error=payload.get("error"),
         )
 
-    def get_all_trackers(self) -> List[CameraSnapshot]:
+    def get_trackers(self):
+        processed = {}
+        info = self.get_raw_trackers()
+        shark2tiger_delta_x = Settings.shark2tiger_delta_x
+        shark2tiger_delta_y = Settings.shark2tiger_delta_y
+        for camera_data in info:
+            camera_name = camera_data.camera
+            for detection in camera_data.detections:
+                id = detection.data['id']
+                new_raw_x = detection.data['floor_xy_mm'][0]
+                new_raw_y = detection.data['floor_xy_mm'][1]
+                new_yaw = detection.data['yaw_deg']
+                already_present = id in processed.keys()
+                if already_present: processed[id] = [camera_name, id, new_raw_x, new_raw_y, new_yaw]
+                else:
+                    existing_raw_x = processed[id][2]
+                    existing_raw_y = processed[id][3]
+                    existing_center_distance = (existing_raw_x ** 2 + existing_raw_y ** 2) ** 0.5
+                    new_center_distance = (new_raw_x ** 2 + new_raw_y ** 2) ** 0.5
+                    if new_center_distance < existing_center_distance:
+                        processed[id] = [camera_name, id, new_raw_x, new_raw_y, new_yaw]
+        for id in processed.keys():
+            camera_name, id, x, y, yaw = processed[id]
+            if camera_name == 'shark':
+                x += shark2tiger_delta_x
+                y += shark2tiger_delta_y
+            processed[id] = [camera_name, id, x, y, yaw]
+        return processed
+
+    def get_raw_trackers(self) -> List[CameraSnapshot]:
         """Return the latest snapshots for every camera."""
 
         payload = self._request("GETALL")

@@ -43,3 +43,7 @@ calibration_dot_spacing = calibration_dot_diameter_mm + 10.0
 # Setting 1.0 makes the rectified image 1 px = 1 mm, i.e., a 1000 mm square becomes 1000 × 1000 px.
 homography_mm_per_px = 1.0
 
+# This converts the coordinates from the shark camera to the tiger camera frame.
+# This assumes that the coordinates frames are only translated.
+shark2tiger_delta_x = 0
+shark2tiger_delta_y = 0
