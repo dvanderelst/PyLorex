@@ -11,6 +11,7 @@ Protocol (newline terminated ASCII commands)::
     CAMERAS\n                       -> {"cameras": ["name", ...]}\n
     GET <camera>\n                 -> latest snapshot for camera\n
     GET <camera> <id>\n            -> single marker entry (or error)\n
+    GETALL\n                      -> snapshots for every known camera\n
 Each response is a single JSON object followed by a newline.
 
 Run ``python -m PyLorex.library.simple_tcp --camera tiger`` to start a
@@ -90,6 +91,10 @@ class TelemetryStore:
     def get(self, camera: str) -> Optional[CameraSnapshot]:
         with self._lock:
             return self._snapshots.get(camera)
+
+    def get_all(self) -> List[CameraSnapshot]:
+        with self._lock:
+            return [self._snapshots[name] for name in sorted(self._snapshots.keys())]
 
     def get_marker(self, camera: str, marker_id: int) -> Optional[dict]:
         snapshot = self.get(camera)
@@ -202,6 +207,9 @@ class SimpleTCPHandler(socketserver.StreamRequestHandler):
             return {"status": "ok", "time": time.time()}
         if keyword == "CAMERAS":
             return {"cameras": self.server.store.list_cameras()}
+        if keyword == "GETALL":
+            snapshots = [snap.to_payload() for snap in self.server.store.get_all()]
+            return {"snapshots": snapshots}
         if keyword == "GET":
             if len(parts) < 2:
                 return {"error": "usage: GET <camera> [marker_id]"}
@@ -228,6 +236,7 @@ class SimpleTCPHandler(socketserver.StreamRequestHandler):
                 "commands": [
                     "PING",
                     "CAMERAS",
+                    "GETALL",
                     "GET <camera>",
                     "GET <camera> <marker_id>",
                 ]

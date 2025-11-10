@@ -89,6 +89,50 @@ class TelemetryClient:
             error=payload.get("error"),
         )
 
+    def get_all_trackers(self) -> List[CameraSnapshot]:
+        """Return the latest snapshots for every camera."""
+
+        payload = self._request("GETALL")
+        snapshots = payload.get("snapshots")
+        if not isinstance(snapshots, list):
+            raise TelemetryError("response missing 'snapshots' list")
+
+        results: List[CameraSnapshot] = []
+        for entry in snapshots:
+            if not isinstance(entry, dict):
+                raise TelemetryError("snapshot payload must be an object")
+
+            camera = entry.get("camera")
+            if camera is None:
+                raise TelemetryError("snapshot missing 'camera'")
+
+            raw_detections = entry.get("detections", [])
+            if not isinstance(raw_detections, list):
+                raise TelemetryError("snapshot contains invalid 'detections'")
+            detections = [MarkerDetection(det) for det in raw_detections]
+
+            frame_size_value = entry.get("frame_size")
+            frame_size: Optional[tuple[int, int]] = None
+            if frame_size_value is not None:
+                if (
+                    not isinstance(frame_size_value, (list, tuple))
+                    or len(frame_size_value) != 2
+                ):
+                    raise TelemetryError("snapshot contains invalid 'frame_size'")
+                frame_size = (int(frame_size_value[0]), int(frame_size_value[1]))
+
+            results.append(
+                CameraSnapshot(
+                    camera=str(camera),
+                    captured_at=float(entry.get("captured_at", 0.0)),
+                    detections=detections,
+                    frame_size=frame_size,
+                    error=entry.get("error"),
+                )
+            )
+
+        return results
+
     def get_marker(self, camera: str, marker_id: int) -> MarkerDetection:
         """Return a single marker detection."""
 

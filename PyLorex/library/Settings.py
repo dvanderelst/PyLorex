@@ -11,7 +11,7 @@ tracking_server_ip = '127.0.0.1'
 
 lorex_ip = '192.168.1.19'
 lorex_server_port = 1234
-
+tracking_server_ip = '192.168.1.20'
 username = 'admin'
 password = 'Bigb1984'
 channels = {'tiger': 2,  'shark': 3}
