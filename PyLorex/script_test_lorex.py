@@ -44,7 +44,7 @@ if test_nr == 3:
 if test_nr == 4:
     client = ServerClient.TelemetryClient()
     cameras = client.list_cameras()
-    info = client.ping()
+    info = client.get_all_trackers()
     print(cameras)
     print(info)
 
