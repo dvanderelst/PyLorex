@@ -23,6 +23,7 @@ simpler command line.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import logging
 import signal
@@ -257,7 +258,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--host",
         default=Settings.lorex_ip,
-        help=f"Bind host (default: {Settings.lorex_ip})",
+        help=(
+            "Bind host (default: "
+            f"{Settings.lorex_ip}). Use 0.0.0.0 to listen on all interfaces if this"
+            " machine does not own the Lorex IP."
+        ),
     )
     parser.add_argument(
         "--port",
@@ -369,7 +374,17 @@ def run_server(
         draw=draw,
     )
 
-    server = SimpleTCPServer((host, port), store)
+    try:
+        server = SimpleTCPServer((host, port), store)
+    except OSError as exc:
+        if exc.errno == errno.EADDRNOTAVAIL:
+            raise RuntimeError(
+                "The telemetry server could not bind to "
+                f"{host}:{port}. The configured host must be an IP address assigned "
+                "to this machine. Update Settings.lorex_ip or pass --host when "
+                "starting the server to choose a reachable interface."
+            ) from exc
+        raise
 
     def shutdown(signame: str) -> None:
         LOGGER.info("Received %s, shutting down", signame)

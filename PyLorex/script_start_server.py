@@ -7,6 +7,8 @@ script directly via ``python PyLorex/script_start_server.py``.
 
 from __future__ import annotations
 
+import sys
+
 from PyLorex.library import Settings
 from PyLorex.library.simple_tcp import run_server
 
@@ -27,15 +29,19 @@ LOG_LEVEL = "INFO"
 def main() -> None:
     """Start the telemetry server with the lab's usual defaults."""
 
-    run_server(
-        cameras=CAMERAS,
-        host=HOST,
-        port=PORT,
-        poll_interval=POLL_INTERVAL,
-        detection_scale=DETECTION_SCALE,
-        draw=DRAW_DEBUG,
-        log_level=LOG_LEVEL,
-    )
+    try:
+        run_server(
+            cameras=CAMERAS,
+            host=HOST,
+            port=PORT,
+            poll_interval=POLL_INTERVAL,
+            detection_scale=DETECTION_SCALE,
+            draw=DRAW_DEBUG,
+            log_level=LOG_LEVEL,
+        )
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
