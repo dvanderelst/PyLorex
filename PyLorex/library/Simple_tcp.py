@@ -155,11 +155,11 @@ class CameraWorker(threading.Thread):
         self.poll_interval = max(poll_interval, 0.01)
         self.detection_scale = detection_scale
         self.draw = draw
-        self._stop = threading.Event()
+        self._stopevt = threading.Event()
         self._camera: Optional[LorexCamera] = None
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stopevt.set()
         self.join(timeout=5.0)
 
     def _ensure_camera(self) -> LorexCamera:
@@ -177,7 +177,7 @@ class CameraWorker(threading.Thread):
             self.store.update_error(self.camera_name, str(exc))
             return
         try:
-            while not self._stop.is_set():
+            while not self._stopevt.is_set():
                 start = time.time()
                 try:
                     detections, _ = cam.get_aruco(
@@ -194,11 +194,11 @@ class CameraWorker(threading.Thread):
                 except Exception as exc:  # noqa: BLE001 - worker must stay alive
                     LOGGER.exception("Detection loop for camera %s failed", self.camera_name)
                     self.store.update_error(self.camera_name, str(exc))
-                    if self._stop.wait(timeout=1.0):
+                    if self._stopevt.wait(timeout=1.0):
                         break
                     continue
 
-                if self._stop.wait(timeout=self.poll_interval):
+                if self._stopevt.wait(timeout=self.poll_interval):
                     break
         finally:
             if cam is not None and cam.grabber is not None:
