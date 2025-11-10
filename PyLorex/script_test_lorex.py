@@ -3,7 +3,6 @@ from library import Lorex
 from library import Grabber
 from library import Utils
 from library import ServerClient
-from library import Settings
 
 test_nr = 4
 

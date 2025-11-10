@@ -111,7 +111,7 @@ class TelemetryClient:
                     if new_center_distance < existing_center_distance:
                         processed[id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
         for id in processed.keys():
-            camera_name, id, x, y, yaw = processed[id]
+            camera_name, x, y, yaw = processed[id]
             if camera_name == 'shark':
                 x += shark2tiger_delta_x
                 y += shark2tiger_delta_y

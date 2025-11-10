@@ -11,7 +11,7 @@ import sys
 
 from library import Settings
 from library import Utils
-from library.simple_tcp import run_server
+from library.Simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------
@@ -19,7 +19,6 @@ CAMERAS = ("tiger", "shark")
 # Bind address for the telemetry service. Pull the defaults from ``Settings`` so
 # CLI wrappers stay in sync. Cameras are still selected by name via
 # ``CAMERAS`` above.
-HOST = Settings.tracking_server_ip
 PORT = Settings.lorex_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
@@ -33,7 +32,7 @@ def main() -> None:
     try:
         run_server(
             cameras=CAMERAS,
-            host=HOST,
+            host='0.0.0.0', #<-- Listen on all interfaces
             port=PORT,
             poll_interval=POLL_INTERVAL,
             detection_scale=DETECTION_SCALE,
