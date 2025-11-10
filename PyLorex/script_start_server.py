@@ -18,7 +18,7 @@ CAMERAS = ("tiger", "shark")
 # Bind address for the telemetry service. Pull the defaults from ``Settings`` so
 # CLI wrappers stay in sync. Cameras are still selected by name via
 # ``CAMERAS`` above.
-HOST = Settings.lorex_ip
+HOST = Settings.tracking_server_ip
 PORT = Settings.lorex_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default

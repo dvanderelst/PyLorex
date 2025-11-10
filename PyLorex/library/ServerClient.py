@@ -45,7 +45,7 @@ class TelemetryClient:
 
     def __init__(
         self,
-        host: str = Settings.lorex_ip,
+        host: str = Settings.tracking_server_ip,
         port: int = Settings.lorex_server_port,
         timeout: float = 5.0,
     ) -> None:

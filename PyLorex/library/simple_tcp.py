@@ -257,11 +257,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--host",
-        default=Settings.lorex_ip,
+        default=Settings.tracking_server_ip,
         help=(
             "Bind host (default: "
-            f"{Settings.lorex_ip}). Use 0.0.0.0 to listen on all interfaces if this"
-            " machine does not own the Lorex IP."
+            f"{Settings.tracking_server_ip}). Use 0.0.0.0 to listen on all interfaces "
+            "if this machine should accept remote clients."
         ),
     )
     parser.add_argument(
@@ -330,7 +330,7 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
 
 def run_server(
     cameras: Sequence[str],
-    host: str = Settings.lorex_ip,
+    host: str = Settings.tracking_server_ip,
     port: int = Settings.lorex_server_port,
     poll_interval: float = 0.1,
     detection_scale: Optional[float] = None,
@@ -381,8 +381,8 @@ def run_server(
             raise RuntimeError(
                 "The telemetry server could not bind to "
                 f"{host}:{port}. The configured host must be an IP address assigned "
-                "to this machine. Update Settings.lorex_ip or pass --host when "
-                "starting the server to choose a reachable interface."
+                "to this machine. Update Settings.tracking_server_ip or pass --host "
+                "when starting the server to choose a reachable interface."
             ) from exc
         raise
 
