@@ -60,7 +60,40 @@ class CameraSnapshot:
         }
         if self.error is not None:
             payload["error"] = self.error
-        return payload
+        return _json_safe(payload)
+
+
+def _json_safe(value):
+    """Return *value* converted to plain Python types for JSON encoding."""
+
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+
+    if _np is not None:
+        if isinstance(value, _np.ndarray):
+            return _json_safe(value.tolist())
+        if isinstance(value, _np.generic):
+            return value.item()
+
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        try:
+            return _json_safe(tolist())
+        except Exception:  # pragma: no cover - fall back if conversion fails
+            pass
+
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return item()
+        except Exception:  # pragma: no cover - fall back if conversion fails
+            pass
+
+    return value
 
 
 class TelemetryStore:
