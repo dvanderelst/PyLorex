@@ -24,9 +24,12 @@ PORT = Settings.lorex_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
-# Adjust the verbosity for the telemetry server. Set to "DEBUG" to see per-frame
-# processing timing in the console while leaving the default at a quieter level.
-VERBOSITY = "DEBUG"
+# Adjust the verbosity for the telemetry server. ``"INFO"`` keeps log output
+# concise while ``"DEBUG"`` includes additional library diagnostics.
+VERBOSITY = "INFO"
+# Detection timing logs: 0 disables extra prints, otherwise every Nth iteration
+# from each camera worker will emit the timing/marker summary message.
+DETECTION_LOG_EVERY = 0
 
 
 def main() -> None:
@@ -41,6 +44,7 @@ def main() -> None:
             detection_scale=DETECTION_SCALE,
             draw=DRAW_DEBUG,
             log_level=VERBOSITY,
+            detection_log_every_n=DETECTION_LOG_EVERY,
         )
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)

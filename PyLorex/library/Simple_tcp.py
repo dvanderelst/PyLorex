@@ -148,6 +148,7 @@ class CameraWorker(threading.Thread):
         poll_interval: float = 0.1,
         detection_scale: Optional[float] = None,
         draw: bool = False,
+        log_every_n: int = 0,
     ) -> None:
         super().__init__(name=f"CameraWorker[{camera_name}]", daemon=True)
         self.camera_name = camera_name
@@ -155,6 +156,8 @@ class CameraWorker(threading.Thread):
         self.poll_interval = max(poll_interval, 0.01)
         self.detection_scale = detection_scale
         self.draw = draw
+        self.log_every_n = max(int(log_every_n), 0)
+        self._iterations = 0
         self._stopevt = threading.Event()
         self._camera: Optional[LorexCamera] = None
 
@@ -193,13 +196,17 @@ class CameraWorker(threading.Thread):
                     self.store.update(snapshot)
                     duration_s = time.time() - start
                     duration_ms = duration_s * 1000.0
-                    if duration_ms >= 0.0:
+                    self._iterations += 1
+                    if self.log_every_n and (self._iterations % self.log_every_n) == 0:
+                        marker_ids = [det.get("id") for det in detections if "id" in det]
+                        marker_summary = ", ".join(str(mid) for mid in marker_ids) or "none"
                         frequency_hz = (1.0 / duration_s) if duration_s > 0 else float("inf")
-                        LOGGER.debug(
-                            "Camera %s processed frame in %.1f ms (%.1f Hz)",
+                        LOGGER.info(
+                            "Camera %s processed frame in %.1f ms (%.1f Hz); markers: %s",
                             self.camera_name,
                             duration_ms,
                             frequency_hz,
+                            marker_summary,
                         )
                 except Exception as exc:  # noqa: BLE001 - worker must stay alive
                     LOGGER.exception("Detection loop for camera %s failed", self.camera_name)
@@ -343,6 +350,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default="INFO",
         help="Logging level (DEBUG, INFO, WARNING...)",
     )
+    parser.add_argument(
+        "--detection-log-every",
+        type=int,
+        default=0,
+        help="Print detection timing/marker info every N iterations (0 disables)",
+    )
     return parser.parse_args(argv)
 
 
@@ -359,6 +372,7 @@ def start_workers(
     poll_interval: float,
     detection_scale: Optional[float],
     draw: bool,
+    log_every_n: int,
 ) -> List[CameraWorker]:
     workers: List[CameraWorker] = []
     for name in cameras:
@@ -368,6 +382,7 @@ def start_workers(
             poll_interval=poll_interval,
             detection_scale=detection_scale,
             draw=draw,
+            log_every_n=log_every_n,
         )
         worker.start()
         workers.append(worker)
@@ -387,6 +402,7 @@ def run_server(
     detection_scale: Optional[float] = None,
     draw: bool = False,
     log_level: Optional[str] = "INFO",
+    detection_log_every_n: int = 0,
 ) -> None:
     """Start the telemetry server with an explicit configuration."""
 
@@ -417,12 +433,16 @@ def run_server(
         configure_logging(log_level)
 
     store = TelemetryStore()
+    if detection_log_every_n < 0:
+        raise ValueError("detection_log_every_n must be non-negative")
+
     workers = start_workers(
         cameras=camera_list,
         store=store,
         poll_interval=poll_interval,
         detection_scale=detection_scale,
         draw=draw,
+        log_every_n=detection_log_every_n,
     )
 
     # Bind and create server
@@ -471,8 +491,10 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         detection_scale=args.detection_scale,
         draw=args.draw,
         log_level=args.log_level,
+        detection_log_every_n=args.detection_log_every,
     )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     main()
+
