@@ -6,30 +6,30 @@ The library allows for **intrinsic camera calibration** and **homography estimat
 
 # Simple TCP telemetry server
 
-The ``PyLorex.library.server.simple_tcp`` module offers a lightweight way to share the
+The ``PyLorex.library.simple_tcp`` module offers a lightweight way to share the
 latest ArUco detections with another machine. Run the server on the computer
 that is directly connected to the cameras and poll it from the machine that
 coordinates your robots.
 
-For day-to-day usage edit ``script_start_server.py`` in the repository root and
+For day-to-day usage edit ``PyLorex/script_start_server.py`` and
 adjust the configuration constants at the top of the file (camera list, host,
 port, poll interval, etc.). ``HOST`` controls the address of the computer
 running the server—leave it at ``0.0.0.0`` to listen on every interface. By
 default the script monitors the ``tiger`` and ``shark``
 cameras::
 
-    python script_start_server.py
+    python PyLorex/script_start_server.py
 
 When you need an ad-hoc configuration, you can launch the module directly and
 repeat the ``--camera`` flag for each feed you want to track. Duplicate camera
 names are ignored (the server logs a warning and keeps one worker per name)::
 
-    python -m PyLorex.library.server.simple_tcp --camera tiger --camera panther
+    python -m PyLorex.library.simple_tcp --camera tiger --camera panther
 
-The repository also includes ``run_server.py`` as a thin wrapper around the
+The repository also includes ``PyLorex/run_server.py`` as a thin wrapper around the
 module entry point if you prefer a shorter command::
 
-    python run_server.py --camera tiger --camera panther
+    python PyLorex/run_server.py --camera tiger --camera panther
 
 All entry points start a threaded TCP listener on ``0.0.0.0:9999`` and spawn
 one worker per camera that continuously calls

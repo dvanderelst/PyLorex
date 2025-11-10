@@ -2,12 +2,12 @@
 
 Edit the module-level constants below to match the usual lab setup. This keeps
 the configuration in one obvious place while still allowing you to run the
-script directly via ``python script_start_server.py``.
+script directly via ``python PyLorex/script_start_server.py``.
 """
 
 from __future__ import annotations
 
-from PyLorex.library.server.simple_tcp import run_server
+from PyLorex.library.simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------

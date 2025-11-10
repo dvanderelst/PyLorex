@@ -13,11 +13,11 @@ Protocol (newline terminated ASCII commands)::
     GET <camera> <id>\n            -> single marker entry (or error)\n
 Each response is a single JSON object followed by a newline.
 
-Run ``python -m PyLorex.library.server.simple_tcp --camera tiger`` to start a
+Run ``python -m PyLorex.library.simple_tcp --camera tiger`` to start a
 server that tracks the camera named ``tiger`` using the settings from
 :mod:`PyLorex.library.Settings`. You can also use the convenience wrappers in
-the repository root (``script_start_server.py`` or ``run_server.py``) if you
-prefer a simpler command line.
+``PyLorex/script_start_server.py`` or ``PyLorex/run_server.py`` if you prefer a
+simpler command line.
 """
 
 from __future__ import annotations
