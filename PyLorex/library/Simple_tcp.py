@@ -22,13 +22,11 @@ simpler command line.
 """
 
 from __future__ import annotations
-import signal
 import sys
 import argparse
 import errno
 import json
 import logging
-import signal
 import socketserver
 import threading
 import time
@@ -287,7 +285,6 @@ class SimpleTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __init__(self, server_address: Tuple[str, int], store: TelemetryStore) -> None:
         super().__init__(server_address, SimpleTCPHandler)
         self.store = store
-        self._stop = threading.Event()
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -418,6 +415,7 @@ def run_server(
         draw=draw,
     )
 
+    # Bind and create server
     try:
         # Bind to '0.0.0.0' to accept connections from all interfaces
         server = SimpleTCPServer(('0.0.0.0', port), store)
@@ -430,36 +428,28 @@ def run_server(
                 f"Clients should connect using {host}:{port}. Update Settings.tracking_server_ip or pass --host "
                 "when starting the server to choose a reachable interface."
             ) from exc
-        raise
+        raise  # re-raise other OS errors
 
-    def shutdown(signame: str) -> None:
-        LOGGER.info("Received %s, shutting down", signame)
-        server.shutdown()  # Stop accepting new connections
-        server._stop.set()  # Signal the handler loop to exit
-        server.server_close()  # Close the server socket
-        stop_workers(workers)  # Stop background workers
-        LOGGER.info("Server and workers stopped")
-        sys.exit(0)  # Force the script to exit
-
-    # Register signal handlers
-    for signame in ("SIGINT", "SIGTERM"):
-        try:
-            signal.signal(getattr(signal, signame), lambda _sig, _frame, s=signame: shutdown(s))
-        except (AttributeError, ValueError):
-            # Some systems (e.g., Windows) may not support all signals.
-            continue
-
-    # Start the server
+    # Start the server (clean Ctrl-C handling)
     try:
         LOGGER.info("Serving on port %s", port)
-        server.serve_forever()
+        server.serve_forever()  # Ctrl-C -> KeyboardInterrupt here
+    except KeyboardInterrupt:
+        LOGGER.info("KeyboardInterrupt (Ctrl-C) received; shutting down")
     except Exception as e:
-        LOGGER.error("Server error: %s", e)
+        LOGGER.error("Server error: %s", e, exc_info=True)
     finally:
-        # Ensure cleanup
-        LOGGER.info("Ensuring cleanup")
-        server.server_close()
-
+        # Orderly shutdown: stop accepting, close socket, stop workers
+        try:
+            server.shutdown()
+        except Exception:
+            pass
+        try:
+            server.server_close()
+        except Exception:
+            pass
+        stop_workers(workers)
+        LOGGER.info("Server and workers stopped")
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
