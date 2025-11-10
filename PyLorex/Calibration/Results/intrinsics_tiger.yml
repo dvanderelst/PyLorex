@@ -1,0 +1,67 @@
+%YAML:1.0
+---
+image_width: 3840
+image_height: 2160
+camera_matrix: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ 2262.6955408978852, 0., 1909.3644671821421, 0.,
+       2261.1928077372559, 1050.8819465159127, 0., 0., 1. ]
+distortion_coefficients: !!opencv-matrix
+   rows: 1
+   cols: 5
+   dt: d
+   data: [ -0.37058213752040398, 0.17128434731467365,
+       -0.0013334384125102989, 0.0010960744126611028,
+       -0.044124339565838715 ]
+rms_reprojection_error: 0.2257944656705051
+pattern_rows: 5
+pattern_cols: 10
+pattern_center_spacing_mm: 50.
+per_image_error:
+   -
+      file: "Calibration/Calibration_images_tiger/frame00.jpg"
+      error_px: 0.030550491504297533
+   -
+      file: "Calibration/Calibration_images_tiger/frame01.jpg"
+      error_px: 0.026920176821596541
+   -
+      file: "Calibration/Calibration_images_tiger/frame02.jpg"
+      error_px: 0.03141749423896046
+   -
+      file: "Calibration/Calibration_images_tiger/frame03.jpg"
+      error_px: 0.04740650738700946
+   -
+      file: "Calibration/Calibration_images_tiger/frame04.jpg"
+      error_px: 0.029174441972975737
+   -
+      file: "Calibration/Calibration_images_tiger/frame05.jpg"
+      error_px: 0.030312323050498656
+   -
+      file: "Calibration/Calibration_images_tiger/frame06.jpg"
+      error_px: 0.027235960397122016
+   -
+      file: "Calibration/Calibration_images_tiger/frame07.jpg"
+      error_px: 0.019063653285675618
+   -
+      file: "Calibration/Calibration_images_tiger/frame08.jpg"
+      error_px: 0.03372885469905379
+   -
+      file: "Calibration/Calibration_images_tiger/frame09.jpg"
+      error_px: 0.053688102209757116
+   -
+      file: "Calibration/Calibration_images_tiger/frame10.jpg"
+      error_px: 0.027621056954682088
+   -
+      file: "Calibration/Calibration_images_tiger/frame11.jpg"
+      error_px: 0.021919601746721206
+   -
+      file: "Calibration/Calibration_images_tiger/frame12.jpg"
+      error_px: 0.032328045690521258
+   -
+      file: "Calibration/Calibration_images_tiger/frame13.jpg"
+      error_px: 0.024284954090452008
+   -
+      file: "Calibration/Calibration_images_tiger/frame14.jpg"
+      error_px: 0.025077240832137901

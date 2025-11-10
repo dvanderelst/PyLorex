@@ -1,0 +1,67 @@
+%YAML:1.0
+---
+image_width: 3840
+image_height: 2160
+camera_matrix: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ 3009.4853952351218, 0., 1906.5153854844245, 0.,
+       3012.3907967341224, 1076.7326075527465, 0., 0., 1. ]
+distortion_coefficients: !!opencv-matrix
+   rows: 1
+   cols: 5
+   dt: d
+   data: [ -0.35480072135191876, 0.1468558492529333,
+       -0.0022594214937807144, 0.00086878918759759752,
+       -0.021485056263100138 ]
+rms_reprojection_error: 0.29768603440241614
+pattern_rows: 5
+pattern_cols: 10
+pattern_center_spacing_mm: 50.
+per_image_error:
+   -
+      file: "Calibration/Calibration_images_shark/frame00.jpg"
+      error_px: 0.041947834931844293
+   -
+      file: "Calibration/Calibration_images_shark/frame01.jpg"
+      error_px: 0.042227430378819958
+   -
+      file: "Calibration/Calibration_images_shark/frame02.jpg"
+      error_px: 0.035443273045691226
+   -
+      file: "Calibration/Calibration_images_shark/frame03.jpg"
+      error_px: 0.037256645694299047
+   -
+      file: "Calibration/Calibration_images_shark/frame04.jpg"
+      error_px: 0.038976026680177592
+   -
+      file: "Calibration/Calibration_images_shark/frame05.jpg"
+      error_px: 0.035660760085264573
+   -
+      file: "Calibration/Calibration_images_shark/frame06.jpg"
+      error_px: 0.034662536904768997
+   -
+      file: "Calibration/Calibration_images_shark/frame07.jpg"
+      error_px: 0.046996396606372483
+   -
+      file: "Calibration/Calibration_images_shark/frame08.jpg"
+      error_px: 0.048972420853676403
+   -
+      file: "Calibration/Calibration_images_shark/frame09.jpg"
+      error_px: 0.032885415203731644
+   -
+      file: "Calibration/Calibration_images_shark/frame10.jpg"
+      error_px: 0.041661490930029528
+   -
+      file: "Calibration/Calibration_images_shark/frame11.jpg"
+      error_px: 0.051612625726503734
+   -
+      file: "Calibration/Calibration_images_shark/frame12.jpg"
+      error_px: 0.043596802197873333
+   -
+      file: "Calibration/Calibration_images_shark/frame13.jpg"
+      error_px: 0.057643791858335701
+   -
+      file: "Calibration/Calibration_images_shark/frame14.jpg"
+      error_px: 0.033077325591032783

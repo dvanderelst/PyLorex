@@ -1,7 +1,12 @@
 
 .idea/
 
-PyLorex/Calibration/
+PyLorex/Calibration/Calibration_images*
+PyLorex/Calibration/Results/**/*.jpg
+PyLorex/Calibration/Results/**/*.png
+PyLorex/Calibration/Results/**/*.html
+PyLorex/Calibration/Results/**/*.txt
+
 PyLorex/library/__pycache__/
 PyLorex/library/voices/
 PyLorex/Temp/
