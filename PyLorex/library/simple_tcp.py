@@ -34,8 +34,8 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from PyLorex.library import Settings
-from PyLorex.library.Lorex import LorexCamera
+from library import Settings
+from library.Lorex import LorexCamera
 import numpy as np
 
 LOGGER = logging.getLogger("pylorex.simple_tcp")

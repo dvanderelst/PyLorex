@@ -1,9 +1,9 @@
 from pathlib import Path
+from piper import PiperVoice
 import pygame
 import time
 import wave
-from os import path
-from piper import PiperVoice
+
 
 class SoundPlayer:
 

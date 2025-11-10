@@ -6,8 +6,7 @@ import json
 import socket
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-
-from PyLorex.library import Settings
+from library import Settings
 
 __all__ = ["TelemetryClient", "TelemetryError", "MarkerDetection", "CameraSnapshot"]
 
