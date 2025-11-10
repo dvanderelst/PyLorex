@@ -7,6 +7,8 @@ import socket
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from PyLorex.library import Settings
+
 __all__ = ["TelemetryClient", "TelemetryError", "MarkerDetection", "CameraSnapshot"]
 
 
@@ -41,7 +43,12 @@ class CameraSnapshot:
 class TelemetryClient:
     """Simple polling client for the :mod:`PyLorex.library.simple_tcp` service."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 9999, timeout: float = 5.0) -> None:
+    def __init__(
+        self,
+        host: str = Settings.lorex_ip,
+        port: int = Settings.lorex_server_port,
+        timeout: float = 5.0,
+    ) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout

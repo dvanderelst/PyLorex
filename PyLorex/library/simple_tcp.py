@@ -32,6 +32,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from PyLorex.library import Settings
 from PyLorex.library.Lorex import LorexCamera
 
 
@@ -253,8 +254,17 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         required=True,
         help="Camera name to track (can repeat)",
     )
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=9999, help="Bind port (default: 9999)")
+    parser.add_argument(
+        "--host",
+        default=Settings.lorex_ip,
+        help=f"Bind host (default: {Settings.lorex_ip})",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=Settings.lorex_server_port,
+        help=f"Bind port (default: {Settings.lorex_server_port})",
+    )
     parser.add_argument(
         "--interval",
         type=float,
@@ -315,8 +325,8 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
 
 def run_server(
     cameras: Sequence[str],
-    host: str = "0.0.0.0",
-    port: int = 9999,
+    host: str = Settings.lorex_ip,
+    port: int = Settings.lorex_server_port,
     poll_interval: float = 0.1,
     detection_scale: Optional[float] = None,
     draw: bool = False,

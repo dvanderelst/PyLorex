@@ -7,16 +7,17 @@ script directly via ``python PyLorex/script_start_server.py``.
 
 from __future__ import annotations
 
+from PyLorex.library import Settings
 from PyLorex.library.simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------
 CAMERAS = ("tiger", "shark")
-# Bind address for the telemetry service. Leave at "0.0.0.0" to listen on all
-# interfaces of the computer that runs this script. Cameras are still selected
-# by name via ``CAMERAS`` above.
-HOST = "0.0.0.0"
-PORT = 9999
+# Bind address for the telemetry service. Pull the defaults from ``Settings`` so
+# CLI wrappers stay in sync. Cameras are still selected by name via
+# ``CAMERAS`` above.
+HOST = Settings.lorex_ip
+PORT = Settings.lorex_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
