@@ -6,7 +6,7 @@ The library allows for **intrinsic camera calibration** and **homography estimat
 
 # Simple TCP telemetry server
 
-The ``PyLorex.server.simple_tcp`` module offers a lightweight way to share the
+The ``PyLorex.library.server.simple_tcp`` module offers a lightweight way to share the
 latest ArUco detections with another machine. Run the server on the computer
 that is directly connected to the cameras and poll it from the machine that
 coordinates your robots.
@@ -24,7 +24,7 @@ When you need an ad-hoc configuration, you can launch the module directly and
 repeat the ``--camera`` flag for each feed you want to track. Duplicate camera
 names are ignored (the server logs a warning and keeps one worker per name)::
 
-    python -m PyLorex.server.simple_tcp --camera tiger --camera panther
+    python -m PyLorex.library.server.simple_tcp --camera tiger --camera panther
 
 The repository also includes a compatibility shim that forwards to the module
 entry point while still accepting all CLI flags::

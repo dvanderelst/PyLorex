@@ -7,7 +7,7 @@ script directly via ``python script_start_server.py``.
 
 from __future__ import annotations
 
-from PyLorex.server.simple_tcp import run_server
+from PyLorex.library.server.simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------

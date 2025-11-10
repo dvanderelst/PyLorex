@@ -1,6 +1,6 @@
 """Server utilities for sharing Lorex marker telemetry."""
 
-from PyLorex.library.server.simple_tcp import (
+from .simple_tcp import (
     CameraSnapshot,
     TelemetryStore,
     CameraWorker,
