@@ -1,11 +1,12 @@
 import os
 import cv2 as cv
+import multiprocessing as mp
 
 os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|max_delay;0|buffer_size;10240|stimeout;3000000")
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
 cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
-cv.setNumThreads(0)
+cv.setNumThreads(mp.cpu_count())
 
 tracking_server_ip = '192.168.1.3'
 
@@ -26,7 +27,7 @@ aruco_yaw_offset_deg = 0
 heading_draw_length = 150
 axis_draw_length_mm = 50
 # ArUco speed knobs
-aruco_detect_scale = 1      # detect at 50% size, then scale corners back
+aruco_detect_scale = 0.75      # detect at 50% size, then scale corners back
 aruco_fast_refine = True      # keep subpix but lighter
 aruco_refine_win = 3          # subpix window (3 good at ~46px markers)
 aruco_refine_iters = 10       # fewer iterations than 30
