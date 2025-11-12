@@ -1,11 +1,12 @@
 import os
 import cv2 as cv
+import multiprocessing as mp
 
 os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|max_delay;0|buffer_size;10240|stimeout;3000000")
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_GSTREAMER", "0")
 cv.ocl.setUseOpenCL(False)  # Disable OpenCL acceleration (stable behavior)
-cv.setNumThreads(0)
+cv.setNumThreads(mp.cpu_count())
 
 tracking_server_ip = '192.168.1.3'
 
