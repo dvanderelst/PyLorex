@@ -47,4 +47,4 @@ homography_mm_per_px = 1.0
 # This converts the coordinates from the shark camera to the tiger camera frame.
 # This assumes that the coordinates frames are only translated.
 shark2tiger_delta_x = 0
-shark2tiger_delta_y = 0
+shark2tiger_delta_y = -1840

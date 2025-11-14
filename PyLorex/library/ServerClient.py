@@ -6,7 +6,7 @@ import json
 import socket
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from library import Settings
+from . import Settings
 
 __all__ = ["TelemetryClient", "TelemetryError", "MarkerDetection", "CameraSnapshot"]
 
@@ -96,28 +96,34 @@ class TelemetryClient:
         for camera_data in info:
             camera_name = camera_data.camera
             for detection in camera_data.detections:
-                id = detection.data['id']
+                tracker_id = detection.data['id']
                 new_raw_x = detection.data['floor_xy_mm'][0]
                 new_raw_y = detection.data['floor_xy_mm'][1]
                 new_yaw = detection.data['yaw_deg']
-                new_entry = not id in processed.keys()
+                new_entry = not tracker_id in processed.keys()
                 if new_entry:
-                    processed[id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
+                    processed[tracker_id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
                 else:
-                    existing_raw_x = processed[id][1]
-                    existing_raw_y = processed[id][2]
+                    existing_raw_x = processed[tracker_id][1]
+                    existing_raw_y = processed[tracker_id][2]
                     existing_center_distance = (existing_raw_x ** 2 + existing_raw_y ** 2) ** 0.5
                     new_center_distance = (new_raw_x ** 2 + new_raw_y ** 2) ** 0.5
                     if new_center_distance < existing_center_distance:
-                        processed[id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
-        for id in processed.keys():
-            camera_name, x, y, yaw = processed[id]
+                        processed[tracker_id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
+        for tracker_id in processed.keys():
+            camera_name, x, y, yaw = processed[tracker_id]
             if camera_name == 'shark':
                 x += shark2tiger_delta_x
                 y += shark2tiger_delta_y
-            processed[id] = [camera_name, x, y, yaw]
+            processed[tracker_id] = [camera_name, x, y, yaw]
         processed['raw_tracker_data'] = info
         return processed
+
+    def get_tracker(self, tracker_id):
+        processed = self.get_trackers()
+        if not tracker_id in processed.keys(): return None, None, None, None
+        camera_name, x, y, yaw = processed[tracker_id]
+        return camera_name, x, y, yaw
 
     def get_raw_trackers(self) -> List[CameraSnapshot]:
         """Return the latest snapshots for every camera."""
@@ -177,7 +183,6 @@ class TelemetryClient:
     # ------------------------------------------------------------------
     # Internal helpers
     def _request(self, command: str) -> Dict[str, Any]:
-        print('here', self.host, self.port)
         with socket.create_connection((self.host, self.port), timeout=self.timeout) as sock:
             sock.sendall(command.encode("utf-8") + b"\n")
             data = self._readline(sock)

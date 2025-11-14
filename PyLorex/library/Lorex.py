@@ -459,8 +459,9 @@ class LorexCamera:
         if ids is None or len(ids) == 0:
             if draw and vis is not None:
                 Path(Settings.temp_dir).mkdir(parents=True, exist_ok=True)
-                out = path.join(Settings.temp_dir, f"aruco_{self.camera_name}.jpg");
+                out = path.join(Settings.temp_dir, f"aruco_{self.camera_name}.jpg")
                 cv.imwrite(out, vis)
+                print('[aruco] no markers detected; saved visualization to', out)
             return [], vis
 
         # --- Prepare square model for IPPE_SQUARE ---
@@ -575,8 +576,9 @@ class LorexCamera:
 
         if draw and vis is not None:
             Path(Settings.temp_dir).mkdir(parents=True, exist_ok=True)
-            out = path.join(Settings.temp_dir, f"aruco_{self.camera_name}.jpg");
+            out = path.join(Settings.temp_dir, f"aruco_{self.camera_name}.jpg")
             cv.imwrite(out, vis)
+            print('[aruco] saved visualization to', out)
 
         return detections, vis
 
