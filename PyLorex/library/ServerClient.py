@@ -106,9 +106,10 @@ class TelemetryClient:
                 else:
                     existing_raw_x = processed[tracker_id][1]
                     existing_raw_y = processed[tracker_id][2]
-                    existing_center_distance = (existing_raw_x ** 2 + existing_raw_y ** 2) ** 0.5
-                    new_center_distance = (new_raw_x ** 2 + new_raw_y ** 2) ** 0.5
-                    if new_center_distance < existing_center_distance:
+                    # Use board/arena origin as the "center" to bias toward the monitored space.
+                    existing_arena_center_dist = (existing_raw_x ** 2 + existing_raw_y ** 2) ** 0.5
+                    new_arena_center_dist = (new_raw_x ** 2 + new_raw_y ** 2) ** 0.5
+                    if new_arena_center_dist < existing_arena_center_dist:
                         processed[tracker_id] = [camera_name, new_raw_x, new_raw_y, new_yaw]
         for tracker_id in processed.keys():
             camera_name, x, y, yaw = processed[tracker_id]
