@@ -7,8 +7,8 @@ PyLorex/Calibration/Results/**/*.png
 PyLorex/Calibration/Results/**/*.html
 PyLorex/Calibration/Results/**/*.txt
 
-PyLorex/library/__pycache__/
-PyLorex/library/voices/
+PyLorex/Library/__pycache__/
+PyLorex/Library/voices/
 PyLorex/Temp/
 PyLorex/OldStuff/
 PyLorex/Environment/

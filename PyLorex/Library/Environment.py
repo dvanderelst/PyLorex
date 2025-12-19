@@ -15,8 +15,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from library import Settings
-from library.Lorex import LorexCamera
+from Library import Settings
+from Library.Lorex import LorexCamera
 
 __all__ = ["capture_environment_layout"]
 

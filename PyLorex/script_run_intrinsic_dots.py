@@ -1,8 +1,8 @@
 import cv2 as cv
 import numpy as np
 import os
-from library import Utils
-from library import Settings
+from Library import Utils
+from Library import Settings
 
 ###########################################################################
 camera_name = 'shark'

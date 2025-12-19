@@ -1,6 +1,6 @@
 import time
 
-from library.Environment import capture_environment_layout
+from Library.Environment import capture_environment_layout
 
 # Edit these values in PyCharm before running for a quick interactive workflow.
 cameras = None  # e.g. ["tiger", "shark"] or None for Settings.channels

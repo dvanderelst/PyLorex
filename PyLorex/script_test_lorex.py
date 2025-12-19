@@ -1,8 +1,8 @@
 import time
-from library import Lorex
-from library import Grabber
-from library import Utils
-from library import ServerClient
+from Library import Lorex
+from Library import Grabber
+from Library import Utils
+from Library import ServerClient
 
 test_nr = 2
 

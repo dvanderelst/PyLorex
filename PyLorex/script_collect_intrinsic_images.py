@@ -1,8 +1,8 @@
 import os
-from library import Utils
-from library import Sound
-from library import Settings
-from library import Grabber
+from Library import Utils
+from Library import Sound
+from Library import Settings
+from Library import Grabber
 import easygui
 
 # Configuration ######################

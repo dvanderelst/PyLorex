@@ -1,5 +1,5 @@
 import os, cv2, threading, time
-from library import Settings
+from Library import Settings
 
 class RTSPGrabber:
     def __init__(self, channel, auto_start=True):

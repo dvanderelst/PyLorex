@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import sys
 
-from library import Settings
-from library import Utils
-from library.Simple_tcp import run_server
+from Library import Settings
+from Library import Utils
+from Library.Simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------

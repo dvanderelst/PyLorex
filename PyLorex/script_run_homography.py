@@ -1,10 +1,10 @@
 import os, json
 import numpy as np
 import cv2 as cv
-from library import Settings
-from library import Lorex
-from library import Utils
-from library import Homography as hg
+from Library import Settings
+from Library import Lorex
+from Library import Utils
+from Library import Homography as hg
 
 # ---------------- SETTINGS ----------------
 alpha = 0.0
