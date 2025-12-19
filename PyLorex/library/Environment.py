@@ -88,9 +88,19 @@ def capture_environment_layout(
                 camera_meta[camera_name] = {"status": "missing_homography"}
                 continue
 
+            offset_xy = None
+            if camera_name == "shark":
+                offset_xy = (Settings.shark2tiger_delta_x, Settings.shark2tiger_delta_y)
             projected = _project_mask_to_arena(
-                mask, np.asarray(H_raw, dtype=np.float64),
-                min_x, max_x, min_y, max_y, mm_per_px, stride
+                mask,
+                np.asarray(H_raw, dtype=np.float64),
+                min_x,
+                max_x,
+                min_y,
+                max_y,
+                mm_per_px,
+                stride,
+                offset_xy=offset_xy,
             )
             if projected is None:
                 camera_meta[camera_name] = {"status": "no_projected_points"}
@@ -195,6 +205,7 @@ def _project_mask_to_arena(
     max_y: float,
     mm_per_px: float,
     stride: int,
+    offset_xy: Optional[Tuple[float, float]] = None,
 ) -> Optional[np.ndarray]:
     ys, xs = np.where(mask > 0)
     if ys.size == 0:
@@ -207,6 +218,9 @@ def _project_mask_to_arena(
     mapped = cv.perspectiveTransform(pts, H_raw).reshape(-1, 2)
     x = mapped[:, 0]
     y = mapped[:, 1]
+    if offset_xy is not None:
+        x = x + float(offset_xy[0])
+        y = y + float(offset_xy[1])
     width_px = int(np.floor((max_x - min_x) / mm_per_px)) + 1
     height_px = int(np.floor((max_y - min_y) / mm_per_px)) + 1
     cols = np.rint((x - min_x) / mm_per_px).astype(int)
