@@ -52,8 +52,8 @@ shark2tiger_delta_y = -1840
 # Environment capture (arena layout snapshots)
 environment_root = 'Environment'
 environment_arena_min_x_mm = -1500.0
-environment_arena_max_x_mm = 1500.0
-environment_arena_min_y_mm = -1500.0
+environment_arena_max_x_mm = 3000.0
+environment_arena_min_y_mm = -3000.0
 environment_arena_max_y_mm = 1500.0
 environment_map_mm_per_px = 5.0
 environment_frame_samples = 3
@@ -63,6 +63,6 @@ environment_morph_iterations = 2
 environment_min_blob_area_px = 200
 # HSV ranges for wall tape (OpenCV HSV: H 0-179, S/V 0-255)
 environment_wall_hsv_ranges = [
-    ((20, 150, 180), (28, 255, 255)),  # orange tape
+    ((19, 65, 162), (24, 215, 255)),  # orange tape
     ((45, 90, 70), (65, 255, 255)),    # green tape
 ]

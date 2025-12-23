@@ -6,10 +6,4 @@ from Library.Environment import capture_environment_layout
 cameras = None  # e.g. ["tiger", "shark"] or None for Settings.channels
 run_name = "baseline"
 samples = None  # None uses Settings.environment_frame_samples
-
-latest_snapshot = capture_environment_layout(
-    cameras=cameras,
-    run_name=run_name,
-    save=True,
-    sample_count=samples,
-)
+latest_snapshot = capture_environment_layout(run_name=run_name)
