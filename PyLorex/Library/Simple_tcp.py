@@ -14,15 +14,11 @@ Protocol (newline terminated ASCII commands)::
     GETALL\n                      -> snapshots for every known camera\n
 Each response is a single JSON object followed by a newline.
 
-Run ``python -m Library.Simple_tcp --camera tiger`` to start a
-server that tracks the camera named ``tiger`` using the settings from
-:mod:`Library.Settings`. You can also use the convenience wrapper
-``PyLorex/script_start_server.py`` if you prefer a simpler command line.
+Use the convenience wrapper ``PyLorex/script_start_server.py`` to start
+the telemetry server with the lab's default settings.
 """
 
 from __future__ import annotations
-import sys
-import argparse
 import errno
 import json
 import logging
@@ -303,61 +299,6 @@ class SimpleTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.store = store
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Simple TCP telemetry relay for Lorex cameras")
-    parser.add_argument(
-        "--camera",
-        action="append",
-        dest="cameras",
-        required=True,
-        help="Camera name to track (can repeat)",
-    )
-    parser.add_argument(
-        "--host",
-        default=Settings.tracking_server_ip,
-        help=(
-            "Bind host (default: "
-            f"{Settings.tracking_server_ip}). Use 0.0.0.0 to listen on all interfaces "
-            "if this machine should accept remote clients."
-        ),
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=Settings.lorex_server_port,
-        help=f"Bind port (default: {Settings.lorex_server_port})",
-    )
-    parser.add_argument(
-        "--interval",
-        type=float,
-        default=0.1,
-        help="Seconds between detection polls (default: 0.1)",
-    )
-    parser.add_argument(
-        "--detection-scale",
-        type=float,
-        default=None,
-        help="Optional scale override for marker detection",
-    )
-    parser.add_argument(
-        "--draw",
-        action="store_true",
-        help="Enable drawing for debugging (writes frames to temp dir)",
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        help="Logging level (DEBUG, INFO, WARNING...)",
-    )
-    parser.add_argument(
-        "--detection-log-every",
-        type=int,
-        default=0,
-        help="Print detection timing/marker info every N iterations (0 disables)",
-    )
-    return parser.parse_args(argv)
-
-
 def configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
@@ -454,8 +395,8 @@ def run_server(
             raise RuntimeError(
                 "The telemetry server could not bind to "
                 f"0.0.0.0:{port}. The server is configured to listen on all interfaces. "
-                f"Clients should connect using {host}:{port}. Update Settings.tracking_server_ip or pass --host "
-                "when starting the server to choose a reachable interface."
+                f"Clients should connect using {host}:{port}. Update Settings.tracking_server_ip "
+                "to choose a reachable interface."
             ) from exc
         raise  # re-raise other OS errors
 
@@ -479,20 +420,3 @@ def run_server(
             pass
         stop_workers(workers)
         LOGGER.info("Server and workers stopped")
-
-def main(argv: Optional[Iterable[str]] = None) -> None:
-    args = parse_args(argv)
-    run_server(
-        cameras=args.cameras,
-        host=args.host,
-        port=args.port,
-        poll_interval=args.interval,
-        detection_scale=args.detection_scale,
-        draw=args.draw,
-        log_level=args.log_level,
-        detection_log_every_n=args.detection_log_every,
-    )
-
-
-if __name__ == "__main__":  # pragma: no cover - CLI entry
-    main()

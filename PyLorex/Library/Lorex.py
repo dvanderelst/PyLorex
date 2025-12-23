@@ -22,7 +22,11 @@ dark_grey_color2 = (160, 160, 160)
 cv_font = cv.FONT_HERSHEY_SIMPLEX
 
 def parse_detections(detections):
-    detected = detections[0]
+    if not detections:
+        return pd.DataFrame(columns=['id', 'x', 'y', 'yaw'])
+    detected = detections[0] if isinstance(detections, (tuple, list)) else detections
+    if not detected:
+        return pd.DataFrame(columns=['id', 'x', 'y', 'yaw'])
     lines = []
     for x in detected:
         tag_id = x['id']
