@@ -14,11 +14,10 @@ Protocol (newline terminated ASCII commands)::
     GETALL\n                      -> snapshots for every known camera\n
 Each response is a single JSON object followed by a newline.
 
-Run ``python -m PyLorex.library.simple_tcp --camera tiger`` to start a
+Run ``python -m Library.Simple_tcp --camera tiger`` to start a
 server that tracks the camera named ``tiger`` using the settings from
-:mod:`PyLorex.library.Settings`. You can also use the convenience wrappers in
-``PyLorex/script_start_server.py`` or ``PyLorex/run_server.py`` if you prefer a
-simpler command line.
+:mod:`Library.Settings`. You can also use the convenience wrapper
+``PyLorex/script_start_server.py`` if you prefer a simpler command line.
 """
 
 from __future__ import annotations
@@ -497,4 +496,3 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     main()
-
