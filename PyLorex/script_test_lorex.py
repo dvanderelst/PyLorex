@@ -7,7 +7,7 @@ from Library import ServerClient
 test_nr = 2
 
 channel_nr = 2
-camera_name = 'tiger'
+camera_name = 'shark'
 iterations = 3
 
 if test_nr == 0:

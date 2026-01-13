@@ -527,8 +527,12 @@ class LorexCamera:
 
                 #----------------
                 # how many pixels long are our X-axis and the tag side (measured vs predicted)?
-                fx = float(K_used[0, 0]);
-                Z = float(tvec[2]);
+                fx = float(K_used[0, 0])
+                tvec_flat = np.asarray(tvec).reshape(-1)
+                if tvec_flat.size < 3:
+                    # Unexpected shape; skip debug math to avoid scalar conversion errors.
+                    continue
+                Z = float(tvec_flat[2])
                 L = float(Settings.axis_draw_length_mm)
 
                 axis_px_meas = np.hypot(*(np.asarray(imgpts[1]).ravel()[:2] - np.asarray(imgpts[0]).ravel()[:2]))
@@ -545,7 +549,7 @@ class LorexCamera:
                 print(f"frame={W}x{H}  fx={fx:.1f}  cx={cx:.1f}")
                 aruco_size = float(Settings.aruco_size)  # mm
                 Z_hat = fx * aruco_size / max(side_px_meas, 1e-6)
-                print(f"Z_from_image≈{Z_hat:.0f} mm  vs  Z_from_PnP={float(tvec[2]):.0f} mm")
+                print(f"Z_from_image≈{Z_hat:.0f} mm  vs  Z_from_PnP={Z:.0f} mm")
 
                 # --- robust forward/heading line in millimetres ---
                 heading_draw_length = Settings.heading_draw_length  # physical length

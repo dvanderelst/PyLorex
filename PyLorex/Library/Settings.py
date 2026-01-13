@@ -24,8 +24,8 @@ aruco_size = 60
 aruco_forward_axis = 'x'
 aruco_yaw_offset_deg = 0
 
-heading_draw_length = 150
-axis_draw_length_mm = 50
+heading_draw_length = 5
+axis_draw_length_mm = 10
 # ArUco speed knobs
 aruco_detect_scale = 0.75      # detect at 50% size, then scale corners back
 aruco_fast_refine = True      # keep subpix but lighter
