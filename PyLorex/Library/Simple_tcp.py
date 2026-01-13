@@ -337,7 +337,7 @@ def stop_workers(workers: Iterable[CameraWorker]) -> None:
 def run_server(
     cameras: Sequence[str],
     host: str = Settings.tracking_server_ip,
-    port: int = Settings.lorex_server_port,
+    port: int = Settings.tracking_server_port,
     poll_interval: float = 0.1,
     detection_scale: Optional[float] = None,
     draw: bool = False,

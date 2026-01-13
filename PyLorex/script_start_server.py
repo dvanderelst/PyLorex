@@ -20,7 +20,7 @@ CAMERAS = ("tiger", "shark")
 # CLI wrappers stay in sync. Cameras are still selected by name via
 # ``CAMERAS`` above.
 HOST = Settings.tracking_server_ip
-PORT = Settings.lorex_server_port
+PORT = Settings.tracking_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
@@ -32,13 +32,13 @@ VERBOSITY = "INFO"
 DETECTION_LOG_EVERY = 10
 
 
-def main() -> None:
+def main(host: str) -> None:
     """Start the telemetry server with the lab's usual defaults."""
 
     try:
         run_server(
             cameras=CAMERAS,
-            host=HOST,
+            host=host,
             port=PORT,
             poll_interval=POLL_INTERVAL,
             detection_scale=DETECTION_SCALE,
@@ -53,5 +53,16 @@ def main() -> None:
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
     current_ip = Utils.get_local_ip()
-    print(f"Starting Lorex telemetry server on {current_ip}:{PORT} ...")
-    main()
+    host_to_advertise = HOST
+    if isinstance(current_ip, str) and current_ip.startswith("Unable to get local IP"):
+        print(f"Starting Lorex telemetry server. Remote clients connect to {HOST}:{PORT}.")
+        print(f"Warning: {current_ip}")
+    else:
+        host_to_advertise = current_ip
+        print(f"Starting Lorex telemetry server. Remote clients connect to {current_ip}:{PORT}.")
+        if current_ip != HOST:
+            print(
+                f"Note: Settings.tracking_server_ip is {HOST}; update it if clients should "
+                "default to the same address."
+            )
+    main(host_to_advertise)
