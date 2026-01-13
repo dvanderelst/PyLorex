@@ -45,7 +45,7 @@ focal_length_mm = 1.2  # mm
 used_circle_px = 2992
 sensor_width_mm, sensor_height_mm = 6.17, 4.55
 used_circle_mm = min(sensor_width_mm, sensor_height_mm)   # inscribed circle diameter on sensor
-pixel_pitch_mm = used_circle_mm / used_circle_px          # mm per pixel on the *output* fisheye circle
+pixel_pitch_mm = used_circle_mm / used_circle_px          # mm per pixel on the *Output* fisheye circle
 
 # Scene / object
 object_diameter_mm = 50

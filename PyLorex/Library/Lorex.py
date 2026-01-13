@@ -164,7 +164,7 @@ class LorexCamera:
         self.map1 = None
         self.map2 = None
         self.map_size = None  # (W, H) of maps
-        self.newK = None      # <-- effective K for undistorted output at map_size
+        self.newK = None      # <-- effective K for undistorted Output at map_size
         # Pose/homography bundle (optional)
         self.bundle = None
         self.load_calibration()

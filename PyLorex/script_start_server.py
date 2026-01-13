@@ -24,7 +24,7 @@ PORT = Settings.lorex_server_port
 POLL_INTERVAL = 0.1  # seconds between detection polls
 DETECTION_SCALE = None  # ``None`` -> use camera default
 DRAW_DEBUG = False
-# Adjust the verbosity for the telemetry server. ``"INFO"`` keeps log output
+# Adjust the verbosity for the telemetry server. ``"INFO"`` keeps log Output
 # concise while ``"DEBUG"`` includes additional library diagnostics.
 VERBOSITY = "INFO"
 # Detection timing logs: 0 disables extra prints, otherwise every Nth iteration

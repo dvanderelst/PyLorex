@@ -35,7 +35,7 @@ K_scaled[0, 2] *= sx;  K_scaled[1, 2] *= sy
 dot_rows = Settings.calibration_dot_rows        # e.g., 5
 dot_cols = Settings.calibration_dot_cols        # e.g., 10
 dot_spacing = Settings.calibration_dot_spacing  # center-to-center spacing (mm)
-mm_per_px = Settings.homography_mm_per_px     # output rectification scale
+mm_per_px = Settings.homography_mm_per_px     # Output rectification scale
 
 # --- Detect circle grid ---
 print("[detect] Looking for circle grid...")
