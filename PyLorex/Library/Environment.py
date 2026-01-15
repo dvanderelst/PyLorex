@@ -26,6 +26,7 @@ def capture_environment_layout(
     *,
     run_name: Optional[str] = None,
     save: bool = True,
+    save_root: Optional[os.PathLike | str] = None,
     sample_count: Optional[int] = None,
     hsv_ranges: Optional[List[Tuple[Tuple[int, int, int], Tuple[int, int, int]]]] = None,
     map_mm_per_px: Optional[float] = None,
@@ -138,7 +139,7 @@ def capture_environment_layout(
     }
 
     if save:
-        _save_snapshot(snapshot, run_name=run_name)
+        _save_snapshot(snapshot, run_name=run_name, save_root=save_root)
 
     return snapshot
 
@@ -271,8 +272,17 @@ def _build_meta(
     }
 
 
-def _save_snapshot(snapshot: Dict[str, Any], run_name: Optional[str] = None) -> str:
-    root = Path(Settings.environment_root)
+def _save_snapshot(
+    snapshot: Dict[str, Any],
+    run_name: Optional[str] = None,
+    save_root: Optional[os.PathLike | str] = None,
+) -> str:
+    if save_root is None:
+        root = Path(Settings.environment_root)
+    else:
+        root = Path(save_root)
+        if not root.is_absolute():
+            root = Path.cwd() / root
     root.mkdir(parents=True, exist_ok=True)
     basename = _snapshot_basename(run_name=run_name, root=root)
     run_dir = root / basename
