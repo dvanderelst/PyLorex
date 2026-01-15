@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 import re
 import os
-from Library import Utils
+from LorexLib import Utils
 
 ###########################################################################
 camera_name = 'shark'

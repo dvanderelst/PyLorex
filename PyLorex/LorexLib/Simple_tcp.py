@@ -28,8 +28,8 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from Library import Settings
-from Library.Lorex import LorexCamera
+from LorexLib import Settings
+from LorexLib.Lorex import LorexCamera
 import numpy as np
 
 LOGGER = logging.getLogger("pylorex.simple_tcp")

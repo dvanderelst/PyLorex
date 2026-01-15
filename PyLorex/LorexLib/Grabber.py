@@ -1,5 +1,5 @@
 import os, cv2, threading, time
-from Library import Settings
+from LorexLib import Settings
 
 class RTSPGrabber:
     def __init__(self, channel, auto_start=True):

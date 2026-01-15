@@ -1,8 +1,8 @@
 import os
-from Library import Utils
-from Library import Sound
-from Library import Settings
-from Library import Grabber
+from LorexLib import Utils
+from LorexLib import Sound
+from LorexLib import Settings
+from LorexLib import Grabber
 import easygui
 
 # Configuration ######################

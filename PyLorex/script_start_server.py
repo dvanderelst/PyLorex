@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import sys
 
-from Library import Settings
-from Library import Utils
-from Library.Simple_tcp import run_server
+from LorexLib import Settings
+from LorexLib import Utils
+from LorexLib.Simple_tcp import run_server
 
 
 # --- Default lab configuration -------------------------------------------------

@@ -1,8 +1,8 @@
 import cv2 as cv
 import numpy as np
 import os
-from Library import Utils
-from Library import Settings
+from LorexLib import Utils
+from LorexLib import Settings
 
 ###########################################################################
 camera_name = 'shark'

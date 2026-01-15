@@ -4,11 +4,11 @@ from os import path
 from pathlib import Path
 import numpy as np
 from math import atan2, degrees
-from Library import Grabber
-from Library import Settings
-from Library import Utils
-from Library import CalibIO
-from Library import Homography as hg
+from LorexLib import Grabber
+from LorexLib import Settings
+from LorexLib import Utils
+from LorexLib import CalibIO
+from LorexLib import Homography as hg
 
 half = Settings.aruco_size / 2.0
 obj_square = np.array([[-half, half, 0.0],[half, half, 0.0],[half, -half, 0.0],[-half, -half, 0.0]], np.float32)

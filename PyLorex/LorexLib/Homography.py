@@ -22,14 +22,14 @@ from pathlib import Path
 from typing import Iterable, Optional, Tuple
 import cv2 as cv
 import numpy as np
-from Library import Utils
+from LorexLib import Utils
 
 
 # ----------------- Intrinsics -----------------
 
 def load_intrinsics(camera_name: str):
     """Load camera intrinsics via Utils.get_calibration_paths(camera_name)."""
-    from Library import Utils  # lazy import to avoid hard dep if not needed
+    from LorexLib import Utils  # lazy import to avoid hard dep if not needed
     paths = Utils.get_calibration_paths(camera_name)
     yml = str(paths["intrinsics_yml"])
     fs = cv.FileStorage(yml, cv.FILE_STORAGE_READ)
