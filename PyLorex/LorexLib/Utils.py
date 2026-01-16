@@ -18,8 +18,11 @@ def get_local_ip():
         return f"Unable to get local IP: {e}"
 
 def get_calibration_paths(camera_name):
+    # Get location of this file
+    base_dir = Path(__file__).resolve().parent.parent
     camera_name = str(camera_name)
-    root_folder = 'Calibration'
+
+    root_folder = base_dir / 'Calibration'
     calibration_images_folder = os.path.join(root_folder, f"Calibration_images_{camera_name}")
     result_folder = os.path.join(root_folder, "Results")
     intrinsics_yml = os.path.join(result_folder, f"intrinsics_{camera_name}.yml")

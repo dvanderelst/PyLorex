@@ -3,6 +3,7 @@ Click-to-sample HSV ranges from a static image.
 
 Usage:
   python script_hsv_sampler.py --image path/to/frame.jpg [--pad 0]
+  python script_hsv_sampler.py --camera tiger [--pad 0]
 
 Controls:
   - Left click: add a sample point (records HSV at that pixel).
@@ -32,7 +33,9 @@ def _compute_bounds(samples_hsv: List[np.ndarray], pad: int) -> Tuple[np.ndarray
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sample HSV values by clicking on an image.")
-    parser.add_argument("--image", required=True, help="Path to a BGR image file.")
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument("--image", help="Path to a BGR image file.")
+    source_group.add_argument("--camera", help="Camera name to capture a snapshot from.")
     parser.add_argument("--pad", type=int, default=0, help="Pad the min/max HSV by this many units.")
     parser.add_argument(
         "--pick-radius",
@@ -43,14 +46,26 @@ def main() -> None:
     parser.add_argument(
         "--display-scale",
         type=float,
-        default=1.0,
+        default=0.25,
         help="Scale factor for display only (sampling uses the original image).",
     )
     args = parser.parse_args()
 
-    frame_bgr = cv.imread(args.image)
-    if frame_bgr is None:
-        raise SystemExit(f"Could not read image: {args.image}")
+    if args.image:
+        frame_bgr = cv.imread(args.image)
+        if frame_bgr is None:
+            raise SystemExit(f"Could not read image: {args.image}")
+    else:
+        from LorexLib.Lorex import LorexCamera
+
+        camera = LorexCamera(args.camera, auto_start=True)
+        try:
+            camera.wait_ready(timeout=5.0)
+            frame_bgr = camera.get_frame(undistort=False)
+            if frame_bgr is None:
+                raise SystemExit(f"Could not capture a frame from camera: {args.camera}")
+        finally:
+            camera.stop()
     if args.display_scale <= 0:
         raise SystemExit("--display-scale must be > 0.")
     frame_hsv = cv.cvtColor(frame_bgr, cv.COLOR_BGR2HSV)
