@@ -35,6 +35,7 @@ def capture_environment_layout(
     morph_kernel: Optional[int] = None,
     morph_iterations: Optional[int] = None,
     min_blob_area_px: Optional[int] = None,
+    use_undistorted: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Capture a snapshot of wall tape locations in board coordinates.
 
@@ -68,13 +69,29 @@ def capture_environment_layout(
     unified = np.zeros((height_px, width_px), dtype=np.uint8)
     per_camera_masks: Dict[str, np.ndarray] = {}
     per_camera_frames: Dict[str, np.ndarray] = {}
+    per_camera_arena_frames: Dict[str, np.ndarray] = {}
     camera_meta: Dict[str, Any] = {}
+    arena_sum = np.zeros((height_px, width_px, 3), dtype=np.float32)
+    arena_count = np.zeros((height_px, width_px, 1), dtype=np.float32)
 
     for camera_name in camera_list:
         cam = LorexCamera(camera_name, auto_start=True)
         try:
             cam.load_board_bundle()
-            frame = _capture_median_frame(cam, sample_count)
+            H_raw = cam.bundle.get("H_raw")
+            H_undistorted = cam.bundle.get("H_undistorted")
+            if use_undistorted is None:
+                want_undistorted = H_undistorted is not None
+            else:
+                want_undistorted = bool(use_undistorted) and H_undistorted is not None
+            # Use undistorted frames with H_undistorted when available to avoid
+            # distortion-induced misalignment between cameras at the image edges.
+            if want_undistorted:
+                alpha = cam.bundle.get("alpha")
+                if alpha is not None:
+                    # Match calibration undistort FOV so the homography stays consistent.
+                    cam.set_alpha(alpha)
+            frame = _capture_median_frame(cam, sample_count, undistort=want_undistorted)
             if frame is None:
                 camera_meta[camera_name] = {"status": "no_frame"}
                 continue
@@ -84,8 +101,8 @@ def capture_environment_layout(
                 camera_meta[camera_name] = {"status": "no_mask"}
                 continue
 
-            H_raw = cam.bundle.get("H_raw")
-            if H_raw is None:
+            H_use = H_undistorted if want_undistorted else H_raw
+            if H_use is None:
                 camera_meta[camera_name] = {"status": "missing_homography"}
                 continue
 
@@ -94,7 +111,7 @@ def capture_environment_layout(
                 offset_xy = (Settings.shark2tiger_delta_x, Settings.shark2tiger_delta_y)
             projected = _project_mask_to_arena(
                 mask,
-                np.asarray(H_raw, dtype=np.float64),
+                np.asarray(H_use, dtype=np.float64),
                 min_x,
                 max_x,
                 min_y,
@@ -108,10 +125,26 @@ def capture_environment_layout(
                 continue
             per_camera_masks[camera_name] = projected
             unified = np.maximum(unified, projected)
+            warped = _warp_frame_to_arena(
+                frame,
+                np.asarray(H_use, dtype=np.float64),
+                min_x,
+                max_x,
+                min_y,
+                max_y,
+                mm_per_px,
+                offset_xy=offset_xy,
+            )
+            if warped is not None:
+                per_camera_arena_frames[camera_name] = warped
+                arena_sum += warped.astype(np.float32)
+                arena_count += (warped.sum(axis=2, keepdims=True) > 0).astype(np.float32)
             camera_meta[camera_name] = {
                 "status": "ok",
                 "mask_pixels": int(np.count_nonzero(mask)),
                 "projected_pixels": int(np.count_nonzero(projected)),
+                "homography": "H_undistorted" if want_undistorted else "H_raw",
+                "undistort_frame": bool(want_undistorted),
             }
         finally:
             cam.stop()
@@ -126,16 +159,26 @@ def capture_environment_layout(
         morph_kernel=kernel_size,
         morph_iterations=kernel_iters,
         min_blob_area_px=min_area,
+        use_undistorted=bool(use_undistorted) if use_undistorted is not None else None,
         per_camera=camera_meta,
     )
     if run_name:
         meta["run_name"] = run_name
+
+    if np.any(arena_count > 0):
+        arena_image = (arena_sum / np.maximum(arena_count, 1.0)).astype(np.uint8)
+        # Stretch contrast so low-contrast floors remain visible in the stitched overview.
+        arena_image = _stretch_contrast(arena_image, arena_count[:, :, 0] > 0)
+    else:
+        arena_image = np.zeros((height_px, width_px, 3), dtype=np.uint8)
 
     snapshot = {
         "mask": unified,
         "meta": meta,
         "per_camera_masks": per_camera_masks,
         "per_camera_frames": per_camera_frames,
+        "per_camera_arena_frames": per_camera_arena_frames,
+        "arena_image": arena_image,
     }
 
     if save:
@@ -150,10 +193,15 @@ def _resolve_cameras(cameras: Optional[Iterable[str]]) -> List[str]:
     return [str(name) for name in cameras]
 
 
-def _capture_median_frame(cam: LorexCamera, sample_count: int) -> Optional[np.ndarray]:
+def _capture_median_frame(
+    cam: LorexCamera,
+    sample_count: int,
+    *,
+    undistort: bool = False,
+) -> Optional[np.ndarray]:
     frames = []
     for _ in range(max(sample_count, 1)):
-        frame = cam.get_frame(undistort=False)
+        frame = cam.get_frame(undistort=undistort)
         if frame is None:
             continue
         frames.append(frame)
@@ -238,6 +286,74 @@ def _project_mask_to_arena(
     return projected
 
 
+def _warp_frame_to_arena(
+    frame: np.ndarray,
+    H_img2mm: np.ndarray,
+    min_x: float,
+    max_x: float,
+    min_y: float,
+    max_y: float,
+    mm_per_px: float,
+    offset_xy: Optional[Tuple[float, float]] = None,
+) -> Optional[np.ndarray]:
+    # Rough stitch: map camera pixels into the arena grid using the same mm->px mapping as the mask.
+    height_px = int(np.floor((max_y - min_y) / mm_per_px)) + 1
+    width_px = int(np.floor((max_x - min_x) / mm_per_px)) + 1
+    if width_px <= 0 or height_px <= 0:
+        return None
+    scale = 1.0 / mm_per_px
+    H_mm2arena = np.array(
+        [
+            [scale, 0.0, -min_x * scale],
+            [0.0, -scale, max_y * scale],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    if offset_xy is not None:
+        dx, dy = float(offset_xy[0]), float(offset_xy[1])
+        H_offset = np.array(
+            [
+                [1.0, 0.0, dx],
+                [0.0, 1.0, dy],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+        H_img2arena = H_mm2arena @ (H_offset @ H_img2mm)
+    else:
+        H_img2arena = H_mm2arena @ H_img2mm
+    warped = cv.warpPerspective(
+        frame,
+        H_img2arena,
+        (width_px, height_px),
+        flags=cv.INTER_LINEAR,
+        borderMode=cv.BORDER_CONSTANT,
+        borderValue=0,
+    )
+    return warped
+
+
+def _stretch_contrast(image: np.ndarray, valid_mask: np.ndarray) -> np.ndarray:
+    if image.ndim != 3 or image.shape[2] != 3:
+        return image
+    if valid_mask is None or not np.any(valid_mask):
+        return image
+    out = image.astype(np.float32)
+    for ch in range(3):
+        vals = out[:, :, ch][valid_mask]
+        if vals.size < 10:
+            continue
+        lo, hi = np.percentile(vals, [2.0, 98.0])
+        if hi <= lo:
+            continue
+        scale = 255.0 / (hi - lo)
+        out[:, :, ch] = (out[:, :, ch] - lo) * scale
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    out[~valid_mask] = 0
+    return out
+
+
 def _build_meta(
     *,
     camera_list: List[str],
@@ -249,6 +365,7 @@ def _build_meta(
     morph_kernel: int,
     morph_iterations: int,
     min_blob_area_px: int,
+    use_undistorted: Optional[bool],
     per_camera: Dict[str, Any],
 ) -> Dict[str, Any]:
     min_x, max_x, min_y, max_y = bounds
@@ -268,6 +385,7 @@ def _build_meta(
         "morph_kernel": morph_kernel,
         "morph_iterations": morph_iterations,
         "min_blob_area_px": min_blob_area_px,
+        "use_undistorted": use_undistorted,
         "per_camera": per_camera,
     }
 
@@ -293,6 +411,7 @@ def _save_snapshot(
     meta = snapshot["meta"]
     per_camera = snapshot["per_camera_masks"]
     per_camera_frames = snapshot.get("per_camera_frames", {})
+    arena_image = snapshot.get("arena_image")
 
     mask_path = run_dir / "mask.png"
     mask_npy_path = run_dir / "mask.npy"
@@ -300,6 +419,13 @@ def _save_snapshot(
 
     cv.imwrite(str(mask_path), mask)
     np.save(str(mask_npy_path), mask)
+    if arena_image is not None:
+        arena_path = run_dir / "arena.png"
+        cv.imwrite(str(arena_path), arena_image)
+        arena_gray = cv.cvtColor(arena_image, cv.COLOR_BGR2GRAY)
+        arena_gray_rgb = cv.cvtColor(arena_gray, cv.COLOR_GRAY2BGR)
+        arena_mask_path = run_dir / "arena_mask.png"
+        cv.imwrite(str(arena_mask_path), arena_gray_rgb)
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, sort_keys=True)
     timestamp_path = run_dir / "timestamp.txt"
@@ -314,6 +440,9 @@ def _save_snapshot(
     for camera_name, cam_frame in per_camera_frames.items():
         frame_path = run_dir / f"frame_{camera_name}.jpg"
         cv.imwrite(str(frame_path), cam_frame)
+    for camera_name, cam_arena in snapshot.get("per_camera_arena_frames", {}).items():
+        arena_cam_path = run_dir / f"arena_{camera_name}.png"
+        cv.imwrite(str(arena_cam_path), cam_arena)
 
     return basename
 
