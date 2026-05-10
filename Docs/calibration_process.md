@@ -18,6 +18,12 @@
 
 **The `tiger` camera is the reference. Data from `shark` is translated into the `tiger` frame.**
 
+**Precondition:** Both calibration boards must be placed with parallel axes
+(same orientation in the room) so the cross-camera relationship is a pure
+translation. If the boards are rotated relative to each other,
+`shark2tiger_delta` cannot capture that rotation and `shark` data will land
+in the unified frame with the wrong heading.
+
 + After homography, measure the world-coordinate offset between the two
    camera frames (in millimetres).
 
