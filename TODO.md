@@ -1,75 +1,12 @@
 # PyLorex — open items
 
-## Investigate why fresh-frame rate is ~0.8 Hz when detection logs say 7–8 Hz
-
-**Status:** open, **HIGH priority** — bottlenecks every settle in 3PiRobot
-(calibration, policy deploy, closed-loop nav). Worked around for now by
-relaxing tolerances and timeouts in `3PiRobot/Library/TrackerNav.py`, but
-that costs ~5 s per settled tracker read across the entire stack.
-
-### Problem (measured 2026-05-10)
-
-Empirical `SCRIPT_MeasureTrackerNoise.py` results from the 3PiRobot client:
-- 300 polls in ~30 s → only **24 distinct snapshots** (8% distinct rate).
-- 92% of polls return bit-identical re-serves of the previous snapshot.
-- Per-call latency to PyLorex (`SCRIPT_TimeTrackerRequest.py`): **median
-  1 ms, max 26 ms** — TCP round-trip is not the bottleneck.
-- Effective fresh-frame rate at the client: **0.8 Hz**.
-
-PyLorex's own `Simple_tcp.py:178-213` `process_loop` reports
-"processed frame in X ms (Y Hz)" at 7–8 Hz. So the *detection step* is
-running at the expected rate, but the **frame being detected isn't
-actually changing** between most iterations — the detector spins on the
-same image bytes 10× before the Grabber's `frame` variable refreshes.
-
-### Hypothesis
-
-The pipeline is:
-```
-DVR → RTSP → Grabber thread (cv2.VideoCapture + cap.read in a loop)
-                └─ updates self.frame
-Detection thread → reads self.frame → aruco detect → store update
-TCP handler      → reads store on GETALL
-```
-
-If `Grabber.frame` only refreshes at ~0.8 Hz, the detection thread spins
-at 7–8 Hz on stale bytes and produces the same result repeatedly.
-
-Most plausible single cause: **the DVR sub-stream is configured to a low
-fps in the DVR's web UI** (Lorex DVRs commonly default sub-streams to
-1–7 fps). If `Grabber` is on the sub-stream, that's the bound regardless
-of how fast detection runs.
-
-### What to investigate
-
-1. **Check the DVR's sub-stream FPS setting via its web UI.** If it's
-   1 fps, raise to 10–15 fps. Single biggest expected win, no code change.
-2. **Confirm which RTSP URL `Grabber.py` is opening** (sub vs. main).
-   Switching to the main stream is an alternative if the DVR allows.
-3. **Instrument `Grabber._loop`** with a per-frame timestamp / counter so
-   the actual frame-arrival rate is logged (not just the detection rate).
-   Even cheaper than (1)/(2): tells us if the bottleneck is RTSP-side or
-   somewhere else in the chain (decoder, codec keyframe interval, etc.).
-4. **RTSP keyframe interval (GOP size).** Some DVRs default to GOP = fps,
-   so 1 keyframe per second; combined with packet loss the decoder may
-   wait for keyframes. Settable in DVR config.
-
-### Why it matters
-
-Every `wait_for_stable_pose` settle in 3PiRobot has to wait for `n_consec`
-(default 4) distinct fresh reads. At 0.8 Hz that's 5+ seconds *minimum*
-per settle, on top of the rotation/drive itself. A typical calibration
-session has 60+ settles → a clean 0.8 Hz → 8 Hz speedup would convert a
-~10 minute calibration run into ~1 minute.
-
-Same applies to closed-loop nav (`TrackerNav.go_to_pose`) and the policy
-deployment loop (`SCRIPT_RunPolicy.py`).
-
----
-
 ## Surface `captured_at` through `get_position` so clients can filter stale snapshots
 
-**Status:** open, low priority. Worked around downstream in `3PiRobot/Control_code/Library/TrackerNav.py:wait_for_stable_pose` (bit-equality filter on consecutive reads).
+**Status:** open, low priority. Worked around downstream in
+`3PiRobot/Control_code/Library/TrackerNav.py:wait_for_stable_pose`
+(bit-equality filter on consecutive reads), which works fine at the
+current fresh-frame rate (3.3 Hz after the 2026-05-10
+`aruco_detect_scale` fix — see "Resolved" below).
 
 ### Problem
 
@@ -99,21 +36,19 @@ Two ~10 Hz loops in the chain, neither synchronized to the other:
 1. **Server detection loop** (`LorexLib/Simple_tcp.py:178-213`):
    ```
    while running:
-       cam.get_aruco(...)                # ~20–50 ms of detection work
+       cam.get_aruco(...)                # detection work
        store.update(snapshot)
        self._stopevt.wait(self.poll_interval)   # default 0.1 s
    ```
-   Effective store-update rate ≈ 1 / (detection_ms + 100 ms) ≈ **7–8 Hz**.
 
 2. **Client poll loop** (downstream, e.g. `wait_for_stable_pose`):
    `get_position()` → TCP `GETALL` → server returns latest snapshot from the
    store. Polled at ~10 Hz.
 
-Whenever the client polls between two store updates (which happens often,
-since 10 > 8), the server returns the most recent snapshot **a second time**.
-The client has no way to distinguish "freshly captured" from "re-served from
-the buffer" — the snapshot's `captured_at` is not exposed in
-`get_tracker(...)`'s return.
+Whenever the client polls between two store updates, the server returns the
+most recent snapshot **a second time**. The client has no way to distinguish
+"freshly captured" from "re-served from the buffer" — the snapshot's
+`captured_at` is not exposed in `get_tracker(...)`'s return.
 
 The relevant shape today (`LorexLib/ServerClient.py:get_tracker`):
 ```
@@ -155,3 +90,52 @@ block legitimate convergence. `captured_at` is the principled signal.
   output at `Diagnostics/drive_curl_20260508T162749/`.
 - Downstream workaround: `3PiRobot/Control_code/Library/TrackerNav.py:wait_for_stable_pose`
   (the `last_read` / repeat-frame filter, plus the `prior_pose` motion-required gate).
+
+---
+
+# Resolved
+
+## ✅ Fresh-frame rate bottleneck — `aruco_detect_scale = 1.0` was running detection on 4K (2026-05-10)
+
+**Fix:** flipped `Settings.aruco_detect_scale` 1.0 → 0.5
+(commit `ab8e817`).
+
+### What was happening
+
+The 3PiRobot client measured only **0.8 Hz of distinct tracker snapshots**
+despite the server's `process_loop` reporting detections at 7–8 Hz. The
+mystery resolved into a chain measurable with two probe scripts (kept in
+`PyLorex/`):
+
+1. `script_probe_rtsp_rate.py` — DVR delivers ~17 fps on both main
+   (3840×2160) and sub (704×480) streams. RTSP/network was *not* the
+   bottleneck.
+2. `script_probe_detection_rate.py` — at `aruco_detect_scale = 1.0`,
+   `aruco.detectMarkers` on the 4K main-stream frame took **~450 ms /
+   call (≈ 2.2 Hz)**, which (combined with the per-camera worker
+   serialization and the 100 ms `poll_interval`) explained the 0.8 Hz
+   client-side rate.
+
+### What the fix changed
+
+Setting `aruco_detect_scale = 0.5` downsamples each frame to 1920×1080
+before running aruco detection, then scales the detected corners back.
+Effects measured on the 3PiRobot side:
+
+| | scale=1.0 (before) | scale=0.5 (after) |
+|---|---|---|
+| Distinct reads / 300 polls | 24 (8 %) | 100 (33 %) |
+| Fresh-frame rate at client | 0.8 Hz | **3.3 Hz** |
+| Per-frame σ_yaw | 0.613° | **0.117°** |
+| Per-frame σ_x / σ_y | 0.16 / 0.26 mm | 0.11 / 0.08 mm |
+
+The noise drop was unexpected; likely the downsample puts the marker
+closer to `aruco_refine_win = 3`'s "good at ~46 px markers" sweet spot,
+and the downsample's anti-aliasing low-pass-filters sensor noise.
+
+### Retuning if hardware changes
+
+If marker size, camera distance, or sensor changes, re-run the two probe
+scripts and adjust `aruco_detect_scale`. The 17 fps grabber ceiling is
+the practical upper bound — any detection rate above ~15 Hz just burns
+CPU re-running on the same buffered frame.

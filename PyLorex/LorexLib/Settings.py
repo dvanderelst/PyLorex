@@ -27,12 +27,16 @@ aruco_yaw_offset_deg = 0
 heading_draw_length = 5
 axis_draw_length_mm = 10
 # ArUco speed knobs
-# detect at 50% size, then scale corners back. With the 4K main stream
-# (3840×2160), running detect at full size took ~450 ms/frame and bounded
-# the whole pipeline to ~2 Hz — see `script_probe_detection_rate.py`
-# measurements 2026-05-10. At scale=0.5 detection drops to ~150 ms/frame
-# (~5 Hz, near the 17 fps grabber ceiling), per-frame yaw noise rises
-# from ~0.6° to ~1° (still well under 3PiRobot's 2° settle tolerance).
+# To re-tune after hardware changes (different marker size, camera
+# distance, sensor), run the two probe scripts in PyLorex/:
+#   - script_probe_rtsp_rate.py        (measures DVR/RTSP frame arrival)
+#   - script_probe_detection_rate.py   (measures detectMarkers cost at
+#                                       multiple scales using this code path)
+# 2026-05-10 measurements: at scale=1.0 detection on the 4K main stream
+# took ~450 ms/frame (≈2 Hz) and bounded the whole pipeline. At scale=0.5
+# detection drops to ~150 ms/frame (≈5 Hz, near the 17 fps grabber
+# ceiling); per-frame yaw noise actually *decreased* (0.6° → 0.12°) —
+# downsample lands the marker closer to refine_win=3's sweet spot.
 aruco_detect_scale = 0.5
 aruco_fast_refine = True      # keep subpix but lighter
 aruco_refine_win = 3          # subpix window (3 good at ~46px markers)
