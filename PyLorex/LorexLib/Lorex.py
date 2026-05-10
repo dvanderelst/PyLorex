@@ -83,8 +83,8 @@ def invert_extrinsics(R, t):
 def yaw_from_R_board_tag(R_board_tag, forward_axis='x', offset_deg=0.0):
     ax = 0 if forward_axis.lower() == 'x' else 1  # 0->X, 1->Y in tag frame
     v = R_board_tag[:, ax].reshape(3)             # forward axis expressed in board frame
-    yaw = degrees(atan2(float(v[1]), float(v[0])))  # atan2(y, x)
-    yaw = (yaw + offset_deg + 360.0) % 360.0
+    yaw = degrees(atan2(float(v[1]), float(v[0])))  # atan2(y, x), CCW from board +X
+    yaw = ((yaw + offset_deg + 180.0) % 360.0) - 180.0  # wrap to [-180, +180)
     return yaw
 
 def load_calibration(camera_name):
