@@ -27,7 +27,13 @@ aruco_yaw_offset_deg = 0
 heading_draw_length = 5
 axis_draw_length_mm = 10
 # ArUco speed knobs
-aruco_detect_scale = 1.0      # detect at 50% size, then scale corners back
+# detect at 50% size, then scale corners back. With the 4K main stream
+# (3840×2160), running detect at full size took ~450 ms/frame and bounded
+# the whole pipeline to ~2 Hz — see `script_probe_detection_rate.py`
+# measurements 2026-05-10. At scale=0.5 detection drops to ~150 ms/frame
+# (~5 Hz, near the 17 fps grabber ceiling), per-frame yaw noise rises
+# from ~0.6° to ~1° (still well under 3PiRobot's 2° settle tolerance).
+aruco_detect_scale = 0.5
 aruco_fast_refine = True      # keep subpix but lighter
 aruco_refine_win = 3          # subpix window (3 good at ~46px markers)
 aruco_refine_iters = 15       # fewer iterations than 30
