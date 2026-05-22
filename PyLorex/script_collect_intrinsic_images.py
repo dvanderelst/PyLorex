@@ -16,6 +16,10 @@ folders = Utils.get_calibration_paths(camera_name)
 sounds = Sound.SoundPlayer()
 camera = Grabber.RTSPGrabber(channel=channel)
 
+print(f"[config] camera={camera_name}, channel={channel}, "
+      f"target={number_of_images} images, "
+      f"output={folders['calibration_images_folder']}")
+
 
 
 calibration_images_folder = folders['calibration_images_folder']
