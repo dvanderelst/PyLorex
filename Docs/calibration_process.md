@@ -82,6 +82,27 @@ translation `t_pnp`, plus rectifying homographies `H_raw` (raw frame
   recover later — taping the board outline onto the floor makes
   reproducing the placement trivial if the calibration has to be
   redone.
+- **Place the board origin on the inter-camera reference line** —
+  the physical line on the floor (typically blue tape) connecting
+  the two cameras' nadir points. This makes the cross-camera offset
+  in Phase 3 a pure translation along one axis rather than a 2-axis
+  offset, which keeps the `shark2tiger_delta` model simple.
+- **Verify the board's physical x/y axes match the axes the
+  calibration software reports.** When the homography script runs, it
+  overlays the detected board axes on the image (green for one axis,
+  red for the other). Those overlay arrows must point in the
+  directions you physically labelled +x and +y on the board.
+  Otherwise the world frame is rotated 90° / 180° / 270° from your
+  intent, and every downstream coordinate is silently mis-aligned.
+
+| Origin on the reference line | Software axes match the physical board axes |
+|---|---|
+| ![Board origin on inter-camera line](calibration_images/board_placement_origin_on_line.png) | ![Board axes aligned with software axes](calibration_images/board_placement_axes_aligned.png) |
+
+In both images: callout (1) marks the board origin sitting on the
+blue floor line; callouts (2) and (3) mark the green/red software
+overlay arrows that must match the board's physical +y and +x.
+
 - For multi-camera setups (`tiger` + `shark`), see Phase 3 below for
   the parallel-axes precondition.
 
@@ -115,6 +136,11 @@ PyLorex/PyLorex/script_run_homography.py
 When two or more cameras cover the arena, one is designated reference
 (by convention: `tiger`) and the others are translated into the
 reference's frame at runtime.
+
+> **Building the calibration panels themselves** — the physical dot
+> board, the floor reference line, and the inter-camera setup — is
+> documented separately on the Notion *Lorex Camera System* page (it
+> needs photos of the construction that aren't mirrored here).
 
 **Precondition for the simple translation-only model:** both
 calibration boards must be placed with **parallel axes** (same
