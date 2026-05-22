@@ -481,18 +481,13 @@ class LorexCamera:
             if not ok: continue
 
             u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
-            # When dist_full is None, frame is undistorted; pass intrinsics to pixel_to_board_xy
-            if dist_full is not None:
-                # RAW frame: use fast H_raw homography
-                X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
-            else:
-                # Undistorted frame: use ray-plane intersection with correct intrinsics
-                X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=False, K_override=K_full, dist_override=None)
-            # Orientation & height if extrinsics known
+            # Orientation, height, and board-frame position if extrinsics known.
+            # PnP gives the marker's true 3D position; homography back-projection
+            # assumes z=0 (floor plane) and biases the (X,Y) of an elevated marker.
             yaw_deg = None
             height_mm = None
             if R_board_from_cam is not None:
-                R_cam_tag, _ = cv.Rodrigues(rvec);
+                R_cam_tag, _ = cv.Rodrigues(rvec)
                 t_cam_tag = tvec.reshape(3)
                 R_board_tag = R_board_from_cam @ R_cam_tag
                 t_board_tag = R_board_from_cam @ t_cam_tag + t_board_from_cam
@@ -500,6 +495,20 @@ class LorexCamera:
                 if fa not in ("x", "y"): print(f"[warn] forward_axis={aruco_forward_axis!r} invalid; using 'x'"); fa = "x"
                 yaw_deg = yaw_from_R_board_tag(R_board_tag, fa, aruco_yaw_offset_deg)
                 height_mm = float(t_board_tag[2])
+                X_floor = float(t_board_tag[0])
+                Y_floor = float(t_board_tag[1])
+                if abs(height_mm - Settings.marker_height_mm) > Settings.marker_height_tolerance_mm:
+                    print(f"[warn] tag id={int(tag_id)} cam={self.camera_name}: "
+                          f"PnP height_mm={height_mm:.1f} differs from expected "
+                          f"{Settings.marker_height_mm:.1f} by >{Settings.marker_height_tolerance_mm:.0f} mm "
+                          f"— check marker mount or extrinsics.")
+            else:
+                # No extrinsics: fall back to floor-homography back-projection (legacy path).
+                if dist_full is not None:
+                    X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
+                else:
+                    X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=False,
+                                                              K_override=K_full, dist_override=None)
 
             det = {
                 "id": int(tag_id),

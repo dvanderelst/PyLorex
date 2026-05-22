@@ -24,6 +24,11 @@ aruco_size = 81
 aruco_forward_axis = 'x'
 aruco_yaw_offset_deg = 0
 
+# Physical marker plane height above the floor (caliper-measured 2026-05-22).
+# Used to sanity-check that PnP's reported height_mm matches reality.
+marker_height_mm = 150.0
+marker_height_tolerance_mm = 20.0
+
 heading_draw_length = 5
 axis_draw_length_mm = 10
 # ArUco speed knobs
