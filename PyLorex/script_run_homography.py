@@ -9,7 +9,7 @@ from LorexLib import Homography as hg
 
 # ---------------- SETTINGS ----------------
 alpha = 0.0
-camera_name = "shark"
+camera_name = "tiger"
 origin_preset = "TR"   # board origin (bottom-left, top-left, etc.)
 # ------------------------------------------------
 
@@ -92,7 +92,11 @@ R_pnp, _ = cv.Rodrigues(rvec)
 cam_center = -R_pnp.T @ tvec
 dist_pnp = float(abs(cam_center[2, 0]))
 proj, _ = cv.projectPoints(obj_xyz, rvec, tvec, K_scaled, dist)
-rp_err = float(np.sqrt(np.mean(np.sum((proj.reshape(-1, 2) - corners) ** 2, axis=1))))
+# Both proj and corners are (N, 1, 2) from OpenCV; reshape both to (N, 2)
+# before subtracting so broadcasting doesn't silently produce a (N, N, 2)
+# matrix of pairwise differences (which inflates the reported RMSE by ~N).
+diff = proj.reshape(-1, 2) - corners.reshape(-1, 2)
+rp_err = float(np.sqrt(np.mean(np.sum(diff ** 2, axis=1))))
 print(f"[PnP] distance to board (mm): {dist_pnp:.2f} (~{dist_pnp/10:.1f} cm)")
 print(f"[PnP] reprojection RMSE (px): {rp_err:.3f}")
 
