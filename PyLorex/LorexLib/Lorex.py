@@ -481,34 +481,41 @@ class LorexCamera:
             if not ok: continue
 
             u, v = float(pts[:, 0].mean()), float(pts[:, 1].mean())
-            # Orientation, height, and board-frame position if extrinsics known.
-            # PnP gives the marker's true 3D position; homography back-projection
-            # assumes z=0 (floor plane) and biases the (X,Y) of an elevated marker.
+            # Step 1: floor-plane (z=0) projection of the marker's image pixel.
+            # This is biased away from the camera nadir for an elevated marker
+            # (the "marker-height bias"); we correct in step 3 below.
+            if dist_full is not None:
+                X0, Y0 = self.pixel_to_board_xy(u, v, use_raw=True)
+            else:
+                X0, Y0 = self.pixel_to_board_xy(u, v, use_raw=False,
+                                                K_override=K_full, dist_override=None)
+
             yaw_deg = None
             height_mm = None
+            X_floor = float(X0)
+            Y_floor = float(Y0)
             if R_board_from_cam is not None:
+                # Step 2: yaw from PnP. (PnP's t_board_tag depth is unreliable
+                # because obj_square below is in non-aruco corner order, which
+                # gives IPPE_SQUARE a degenerate solution. The rotation column
+                # used here still produces a usable yaw given the existing
+                # aruco_yaw_offset_deg / aruco_forward_axis calibration.)
                 R_cam_tag, _ = cv.Rodrigues(rvec)
-                t_cam_tag = tvec.reshape(3)
                 R_board_tag = R_board_from_cam @ R_cam_tag
-                t_board_tag = R_board_from_cam @ t_cam_tag + t_board_from_cam
                 fa = (aruco_forward_axis or "x").lower()
                 if fa not in ("x", "y"): print(f"[warn] forward_axis={aruco_forward_axis!r} invalid; using 'x'"); fa = "x"
                 yaw_deg = yaw_from_R_board_tag(R_board_tag, fa, aruco_yaw_offset_deg)
-                height_mm = float(t_board_tag[2])
-                X_floor = float(t_board_tag[0])
-                Y_floor = float(t_board_tag[1])
-                if abs(height_mm - Settings.marker_height_mm) > Settings.marker_height_tolerance_mm:
-                    print(f"[warn] tag id={int(tag_id)} cam={self.camera_name}: "
-                          f"PnP height_mm={height_mm:.1f} differs from expected "
-                          f"{Settings.marker_height_mm:.1f} by >{Settings.marker_height_tolerance_mm:.0f} mm "
-                          f"— check marker mount or extrinsics.")
-            else:
-                # No extrinsics: fall back to floor-homography back-projection (legacy path).
-                if dist_full is not None:
-                    X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=True)
-                else:
-                    X_floor, Y_floor = self.pixel_to_board_xy(u, v, use_raw=False,
-                                                              K_override=K_full, dist_override=None)
+
+                # Step 3: correct the floor-plane (X, Y) to the marker's true
+                # height. C is the camera centre in board frame; back-project
+                # the ray through (X0, Y0, 0) to z = marker_height_mm using the
+                # same lambda = 1 - h/C_z formula the wall back-projection uses.
+                C = t_board_from_cam  # = -R.T @ t = camera centre in board frame
+                if C[2] > 0:
+                    lam = 1.0 - float(Settings.marker_height_mm) / float(C[2])
+                    X_floor = float(C[0] + lam * (X0 - C[0]))
+                    Y_floor = float(C[1] + lam * (Y0 - C[1]))
+                height_mm = float(Settings.marker_height_mm)
 
             det = {
                 "id": int(tag_id),
