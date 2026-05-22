@@ -65,7 +65,7 @@ homography_mm_per_px = 1.0
 # and the zero-zoom recalibration; shark board origin is 1.99 m south of
 # tiger board origin, both boards on the inter-camera line with parallel axes.
 shark2tiger_delta_x = 0
-shark2tiger_delta_y = -1480
+shark2tiger_delta_y = -1430
 
 # Environment capture (arena layout snapshots)
 environment_root = 'Environment'
