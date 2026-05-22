@@ -1,4 +1,5 @@
 import os, json
+os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts.warning=false")
 import numpy as np
 import cv2 as cv
 from LorexLib import Settings

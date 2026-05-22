@@ -1,4 +1,5 @@
 import os
+os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts.warning=false")
 from LorexLib import Utils
 from LorexLib import Sound
 from LorexLib import Settings
@@ -7,7 +8,7 @@ import easygui
 
 # Configuration ######################
 
-camera_name = 'shark' # The ID of the camera
+camera_name = 'tiger' # The ID of the camera
 number_of_images = 15
 #######################################
 

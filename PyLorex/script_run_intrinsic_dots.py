@@ -1,11 +1,12 @@
+import os
+os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts.warning=false")
 import cv2 as cv
 import numpy as np
-import os
 from LorexLib import Utils
 from LorexLib import Settings
 
 ###########################################################################
-camera_name = 'shark'
+camera_name = 'tiger'
 visual_check = True           # show windows during detection
 visual_check_ms = 1000        # ms per image during visual check (was 150)
 save_visualizations = True    # write annotated PNGs to result folder
