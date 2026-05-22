@@ -29,6 +29,11 @@ PyLorex/PyLorex/script_collect_intrinsic_images.py
   distance (close/far), and tilt (rotate, slant). Variety matters far
   more than the count — 15 well-varied frames beat 50 near-identical
   ones.
+- The board does **not** need to be on or near the floor for
+  intrinsics — hold it anywhere it's clearly visible and in focus.
+  The math here only needs the pattern's geometry, not its absolute
+  position. (The floor constraint applies only in Phase 2, where the
+  board defines the world frame's z = 0 plane.)
 - Output: `Calibration/<camera>/calibration_images/frameNN.jpg`.
 
 ### 1b. Solve intrinsics
