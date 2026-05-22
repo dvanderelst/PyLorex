@@ -87,6 +87,12 @@ translation `t_pnp`, plus rectifying homographies `H_raw` (raw frame
   the two cameras' nadir points. This makes the cross-camera offset
   in Phase 3 a pure translation along one axis rather than a 2-axis
   offset, which keeps the `shark2tiger_delta` model simple.
+  - The constraint is "on the line", not "at the image centre". The
+    position *along* the line is a free choice — place each camera's
+    board roughly under that camera's nadir (best image-centre
+    resolution, lowest distortion). The two boards will end up at
+    different points on the line, separated by the inter-camera
+    distance, which becomes `shark2tiger_delta_y` in Phase 3.
 - **Verify the board's physical x/y axes match the axes the
   calibration software reports.** When the homography script runs, it
   overlays the detected board axes on the image (green for one axis,
