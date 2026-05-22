@@ -61,8 +61,10 @@ homography_mm_per_px = 1.0
 
 # This converts the coordinates from the shark camera to the tiger camera frame.
 # This assumes that the coordinates frames are only translated.
+# Updated 2026-05-22 after cameras were moved further apart north-south;
+# both boards placed on the blue inter-camera line with parallel axes.
 shark2tiger_delta_x = 0
-shark2tiger_delta_y = -1840
+shark2tiger_delta_y = -2250
 
 # Environment capture (arena layout snapshots)
 environment_root = 'Environment'

@@ -5,7 +5,7 @@ import os
 from LorexLib import Utils
 
 ###########################################################################
-camera_name = 'shark'
+camera_name = 'tiger'
 show_images = False
 ###########################################################################
 
