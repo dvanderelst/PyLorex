@@ -9,7 +9,7 @@ import easygui
 # Configuration ######################
 
 camera_name = 'tiger' # The ID of the camera
-number_of_images = 15
+number_of_images = 20
 #######################################
 
 channel = Settings.channels[camera_name]
