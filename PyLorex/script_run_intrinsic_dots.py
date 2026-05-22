@@ -7,6 +7,7 @@ from LorexLib import Settings
 ###########################################################################
 camera_name = 'shark'
 visual_check = True           # show windows during detection
+visual_check_ms = 1000        # ms per image during visual check (was 150)
 save_visualizations = True    # write annotated PNGs to result folder
 ###########################################################################
 
@@ -63,6 +64,8 @@ if save_visualizations:
 dot_rows = Settings.calibration_dot_rows            # e.g., 5
 dot_cols = Settings.calibration_dot_cols            # e.g., 10
 dot_spacing = Settings.calibration_dot_spacing      # center-to-center spacing (mm)
+print(f"[config] camera={camera_name}, pattern={dot_rows} rows x {dot_cols} cols, "
+      f"spacing={dot_spacing:.1f} mm")
 
 # --------- Object points (planar, Z=0) ----------
 objp = np.zeros((dot_rows * dot_cols, 3), np.float32)
@@ -89,6 +92,9 @@ for idx, f in enumerate(files):
     if img_size is None:
         img_size = (img.shape[1], img.shape[0])  # (w, h)
         detector = make_blob_detector(img.shape)
+    elif (img.shape[1], img.shape[0]) != img_size:
+        raise SystemExit(f"[error] {os.path.basename(f)} is {img.shape[1]}x{img.shape[0]}, "
+                         f"expected {img_size[0]}x{img_size[1]}. Resolutions must match.")
 
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     found, centers = cv.findCirclesGrid(gray, (dot_cols, dot_rows),
@@ -108,8 +114,9 @@ for idx, f in enumerate(files):
         vis = annotate(img, gray, detector, found, centers if found else None)
         if visual_check:
             cv.imshow("Detection (green=blobs, red=circle centers if found)", fit_for_display(vis))
-            # small delay to ensure last frame is visible and not immediately overwritten
-            cv.waitKey(150)
+            # Hold each image long enough to actually eyeball the overlay; press
+            # any key in the window to skip ahead.
+            cv.waitKey(visual_check_ms)
         if save_visualizations:
             out_path = os.path.join(result_folder, "detect_vis", f"vis_{idx:03d}.png")
             cv.imwrite(out_path, vis)
