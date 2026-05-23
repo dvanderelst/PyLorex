@@ -9,7 +9,7 @@ from LorexLib import Homography as hg
 
 # ---------------- SETTINGS ----------------
 alpha = 0.0
-camera_name = "tiger"
+camera_name = "shark"
 origin_preset = "TR"   # board origin (bottom-left, top-left, etc.)
 # ------------------------------------------------
 

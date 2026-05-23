@@ -6,74 +6,16 @@ camera_matrix: !!opencv-matrix
    rows: 3
    cols: 3
    dt: d
-   data: [ 2313.4298436764789, 0., 1890.26469059693, 0.,
-       2312.2267980998868, 1048.0326885982306, 0., 0., 1. ]
+   data: [ 2320.5032285648404, 0., 1887.6330963693583, 0.,
+       2322.5759019246493, 1022.8785192392894, 0., 0., 1. ]
 distortion_coefficients: !!opencv-matrix
    rows: 1
    cols: 5
    dt: d
-   data: [ -0.40060197123269342, 0.21179047631332537,
-       -0.0010714502380045124, 0.00041062663571989061,
-       -0.067381472658713762 ]
-rms_reprojection_error: 0.18364789319243188
+   data: [ -0.38054559025886864, 0.16694435154531703,
+       0.00044602442281800928, 0.00033038227698105712,
+       -0.03808738156215908 ]
+rms_reprojection_error: 0.20108318594798782
 pattern_rows: 5
 pattern_cols: 10
 pattern_center_spacing_mm: 50.
-per_image_error:
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame00.jpg"
-      error_px: 0.029151639323750044
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame01.jpg"
-      error_px: 0.036889128923071557
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame02.jpg"
-      error_px: 0.027328257490614467
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame03.jpg"
-      error_px: 0.030855122719908406
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame04.jpg"
-      error_px: 0.026190462443893354
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame05.jpg"
-      error_px: 0.029782016038299119
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame06.jpg"
-      error_px: 0.026255168845839352
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame07.jpg"
-      error_px: 0.021470044191092882
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame08.jpg"
-      error_px: 0.024296657863716889
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame10.jpg"
-      error_px: 0.025683017419650973
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame11.jpg"
-      error_px: 0.026160635442105801
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame12.jpg"
-      error_px: 0.027169271803979312
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame13.jpg"
-      error_px: 0.017162041101898368
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame14.jpg"
-      error_px: 0.019761772892386349
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame15.jpg"
-      error_px: 0.022079712916597067
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame16.jpg"
-      error_px: 0.022578418628823472
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame17.jpg"
-      error_px: 0.026420373955482055
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame18.jpg"
-      error_px: 0.022904113725128558
-   -
-      file: "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/Calibration_images_shark/frame19.jpg"
-      error_px: 0.024609027315136003
