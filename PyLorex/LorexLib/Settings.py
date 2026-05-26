@@ -59,13 +59,30 @@ calibration_dot_spacing = calibration_dot_diameter_mm + 10.0
 # Setting 1.0 makes the rectified image 1 px = 1 mm, i.e., a 1000 mm square becomes 1000 × 1000 px.
 homography_mm_per_px = 1.0
 
-# This converts the coordinates from the shark camera to the tiger camera frame.
-# This assumes that the coordinates frames are only translated.
-# Updated 2026-05-22 after cameras were moved further apart north-south
-# and the zero-zoom recalibration; shark board origin is 1.99 m south of
-# tiger board origin, both boards on the inter-camera line with parallel axes.
+# Camera-system geometry (translates shark's per-camera board frame into the
+# unified tiger frame). Values are read at import time from a JSON config
+# written by script_set_camera_center.py (which derives them from the clicked
+# floor-mark positions + the user's tape-measured physical inter-camera
+# distance). Hardcoded values below are the fallback if the config file is
+# absent.
+import json as _json
+from pathlib import Path as _Path
+
 shark2tiger_delta_x = 0
-shark2tiger_delta_y = -1400
+shark2tiger_delta_y = -1400  # fallback; overridden by camera_system.json
+
+_camera_system_json = (
+    _Path(__file__).resolve().parent.parent / "Calibration" / "Results" / "camera_system.json"
+)
+if _camera_system_json.exists():
+    try:
+        with open(_camera_system_json) as _f:
+            _cs = _json.load(_f)
+        shark2tiger_delta_x = float(_cs.get("shark2tiger_delta_x_mm", shark2tiger_delta_x))
+        shark2tiger_delta_y = float(_cs.get("shark2tiger_delta_y_mm", shark2tiger_delta_y))
+    except Exception as _e:
+        print(f"[Settings] Could not parse {_camera_system_json}: {_e}; "
+              f"using hardcoded fallback shark2tiger_delta_xy.")
 
 # Environment capture (arena layout snapshots)
 environment_root = 'Environment'

@@ -34,6 +34,7 @@ def get_calibration_paths(camera_name):
     raw_image = os.path.join(result_folder, f"raw_{camera_name}.jpg")
     rectified_image = os.path.join(result_folder, f"rectified_{camera_name}.jpg")
     axes_overlay = os.path.join(result_folder, f"axes_overlay_{camera_name}.jpg")  # ← new
+    c_measured_json = os.path.join(result_folder, f"c_measured_{camera_name}.json")
 
     return dict(
         result_folder=result_folder,
@@ -47,6 +48,7 @@ def get_calibration_paths(camera_name):
         raw_image=raw_image,
         rectified_image=rectified_image,
         axes_overlay=axes_overlay,
+        c_measured_json=c_measured_json,
     )
 
 

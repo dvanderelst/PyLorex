@@ -1,5 +1,5 @@
 
-import json, numpy as np
+import json, os, numpy as np
 from LorexLib import Utils
 
 def load_pose_bundle(camera_name):
@@ -52,4 +52,20 @@ def load_pose_bundle(camera_name):
             bundle["alpha"] = float(J["alpha"])
     # convenient derived
     bundle["K_inv"] = np.linalg.inv(bundle["K"])
+
+    # Optional override: measured camera centre in board frame (plumb-line +
+    # tape height). When present, downstream code (e.g. the marker-height
+    # correction in Lorex.get_aruco) should prefer this over the PnP-derived
+    # C = -R.T @ t, which is ambiguous on a single planar calibration board.
+    c_path = p.get("c_measured_json")
+    if c_path and os.path.exists(c_path):
+        try:
+            with open(c_path, "r") as f:
+                Cj = json.load(f)
+            bundle["C_measured"] = np.array(
+                [float(Cj["Cx_mm"]), float(Cj["Cy_mm"]), float(Cj["Cz_mm"])],
+                dtype=np.float64,
+            )
+        except Exception as e:
+            print(f"[bundle] Could not load measured C from {c_path}: {e}")
     return bundle

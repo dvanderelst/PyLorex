@@ -12,6 +12,7 @@ PyLorex/LorexLib/voices/
 PyLorex/Temp/
 PyLorex/OldStuff/
 PyLorex/Environment/
+PyLorex/Calibration/CameraCenterSnapshots/
 
 
 PyLorex/library/__pycache__/
