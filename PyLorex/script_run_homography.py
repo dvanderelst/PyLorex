@@ -73,7 +73,7 @@ obj_xyz = np.concatenate(
 img_pts = corners.reshape(-1, 1, 2).astype(np.float32)
 
 # --- Homography for rectification (RAW distorted pixels) ---
-H_raw, _ = hg.estimate_homography(corners, obj_mm)
+H_raw, H_raw_mask = hg.estimate_homography(corners, obj_mm)
 width_mm = (dot_cols - 1) * dot_spacing
 height_mm = (dot_rows - 1) * dot_spacing
 rectified = hg.rectify_image(frame, H_raw, width_mm, height_mm, mm_per_px=mm_per_px)
@@ -99,6 +99,54 @@ diff = proj.reshape(-1, 2) - corners.reshape(-1, 2)
 rp_err = float(np.sqrt(np.mean(np.sum(diff ** 2, axis=1))))
 print(f"[PnP] distance to board (mm): {dist_pnp:.2f} (~{dist_pnp/10:.1f} cm)")
 print(f"[PnP] reprojection RMSE (px): {rp_err:.3f}")
+
+# --- H_raw fit diagnostics ---
+# H_raw is a 2D homography fit on RAW (distorted) pixels with no distortion
+# model, so peripheral dots can deviate from the linear-H prediction by more
+# than the RANSAC threshold and get dropped from the fit. When H_raw is later
+# used to back-project marker / wall pixels far from the calibration board
+# (in SCRIPT_BuildArenaGeometry / detect_aruco), any peripheral bias here
+# propagates into (X0, Y0). Note: hg.estimate_homography's "ransac_thresh_px"
+# parameter is actually in DESTINATION units (mm here, since dst=obj_mm), not
+# pixels, despite the name.
+h_pred_mm = cv.perspectiveTransform(
+    corners.reshape(-1, 1, 2).astype(np.float32), H_raw
+).reshape(-1, 2)
+h_resid_mm = h_pred_mm - obj_mm.reshape(-1, 2)
+h_norms_mm = np.linalg.norm(h_resid_mm, axis=1)
+
+n_total = int(h_norms_mm.shape[0])
+mask_flat = (H_raw_mask.flatten().astype(bool)
+             if H_raw_mask is not None else np.ones(n_total, dtype=bool))
+n_inliers = int(mask_flat.sum())
+inlier_norms = h_norms_mm[mask_flat]
+
+print(f"[H_raw] {n_inliers}/{n_total} inliers "
+      f"({100.0 * n_inliers / max(n_total, 1):.1f}%)")
+print(f"[H_raw] inlier residual (mm): mean {inlier_norms.mean():.2f}, "
+      f"max {inlier_norms.max():.2f}, "
+      f"RMS {float(np.sqrt(np.mean(inlier_norms ** 2))):.2f}")
+
+# Worst-fitting inlier dot — image pixel + board position + residual.
+worst_local = int(np.argmax(inlier_norms))
+worst_global = int(np.where(mask_flat)[0][worst_local])
+wu, wv = corners.reshape(-1, 2)[worst_global]
+wx, wy = obj_mm.reshape(-1, 2)[worst_global]
+print(f"[H_raw] worst inlier dot #{worst_global}: "
+      f"image_px=({wu:.1f}, {wv:.1f})  board_mm=({wx:.1f}, {wy:.1f})  "
+      f"residual={float(inlier_norms[worst_local]):.2f} mm")
+
+if n_inliers < n_total:
+    outlier_idx = np.where(~mask_flat)[0]
+    outlier_norms = h_norms_mm[~mask_flat]
+    print(f"[H_raw] outlier residual (mm): "
+          f"mean {outlier_norms.mean():.2f}, max {outlier_norms.max():.2f}")
+    for k in outlier_idx:
+        ou, ov = corners.reshape(-1, 2)[k]
+        ox, oy = obj_mm.reshape(-1, 2)[k]
+        print(f"[H_raw]   outlier #{int(k)}: "
+              f"image_px=({ou:.1f}, {ov:.1f})  board_mm=({ox:.1f}, {oy:.1f})  "
+              f"residual={float(h_norms_mm[k]):.2f} mm")
 
 # --- Draw overlay with axes ---
 overlay = hg.draw_board_axes_overlay(
