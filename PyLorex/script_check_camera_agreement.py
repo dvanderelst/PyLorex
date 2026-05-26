@@ -28,11 +28,11 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-from LorexLib import Lorex, Sound, Utils
+from LorexLib import Lorex, Settings, Sound, Utils
 
 TARGET_ID = 1                 # Robot01 marker; change if probing a different tag
 N_POSITIONS = 15              # how many placements to walk through
-SECONDS_PER_POSITION = 5     # time to lift + place + step away
+SECONDS_PER_POSITION = 10     # time to lift + place + step away
 FRAMES_PER_SAMPLE = 3         # frames to median over per placement
 FRAME_INTERVAL_S = 0.2        # spacing between those frames (lets RTSP advance)
 CSV_PATH = "Temp/camera_agreement.csv"
@@ -51,20 +51,43 @@ def print_pose_summary(camera_name):
 
     R = np.asarray(s["R_pnp"])
     t = np.asarray(s["t_pnp"]).reshape(3)
-    C = -R.T @ t                              # camera centre in board frame
+    C_pnp = -R.T @ t                          # PnP-derived centre in board frame
     # Camera optical axis in board frame (R^T @ +z_cam = third row of R)
     z_cam_in_board = R[2, :]
-    # For a downward-looking camera, this points roughly along -z_board (into floor).
     cos_off_vertical = float(np.clip(abs(z_cam_in_board[2]), -1.0, 1.0))
     tilt_off_vertical_deg = float(np.degrees(np.arccos(cos_off_vertical)))
 
+    # If c_measured_{cam}.json exists, it overrides the PnP C in Lorex.get_aruco
+    # (per-camera board frame, same frame as PnP). Show both so the printed
+    # summary matches what the live tracker is actually using.
+    c_meas_path = paths.get("c_measured_json")
+    C_meas = None
+    if c_meas_path and os.path.exists(c_meas_path):
+        with open(c_meas_path) as f:
+            cj = json.load(f)
+        C_meas = np.array([float(cj["Cx_mm"]),
+                           float(cj["Cy_mm"]),
+                           float(cj["Cz_mm"])])
+
     print(f"  [{camera_name}]")
     print(f"     reproj RMSE : {s['reprojection_rmse_px']:.3f} px")
-    print(f"     PnP height  : {float(C[2]):.1f} mm")
-    print(f"     nadir (x,y) : ({float(C[0]):.0f}, {float(C[1]):.0f}) mm")
+    print(f"     PnP    height/nadir : {float(C_pnp[2]):7.1f} mm  "
+          f"({float(C_pnp[0]):+7.1f}, {float(C_pnp[1]):+7.1f})")
+    if C_meas is not None:
+        d = C_meas - C_pnp
+        print(f"     meas   height/nadir : {float(C_meas[2]):7.1f} mm  "
+              f"({float(C_meas[0]):+7.1f}, {float(C_meas[1]):+7.1f})   "
+              f"<-- used by live tracker")
+        print(f"     meas - PnP          : "
+              f"Δz {d[2]:+7.1f}    "
+              f"Δxy ({d[0]:+7.1f}, {d[1]:+7.1f}) mm  "
+              f"|Δxy|={float(np.hypot(d[0], d[1])):.1f}")
+    else:
+        print("     (no c_measured_{cam}.json — live tracker uses PnP C)")
     print(f"     optical-axis tilt off vertical: {tilt_off_vertical_deg:.2f} deg")
-    return {"name": camera_name, "C": C, "rmse": s["reprojection_rmse_px"],
-            "tilt_deg": tilt_off_vertical_deg}
+    C_active = C_meas if C_meas is not None else C_pnp
+    return {"name": camera_name, "C": C_active, "C_pnp": C_pnp, "C_meas": C_meas,
+            "rmse": s["reprojection_rmse_px"], "tilt_deg": tilt_off_vertical_deg}
 
 
 def find_target(detections, target_id):
@@ -75,8 +98,15 @@ def find_target(detections, target_id):
 
 
 def sample_once(tiger, shark, target_id):
-    """Median of FRAMES_PER_SAMPLE detections per camera. Returns
-    (x_tiger, y_tiger, x_shark, y_shark, n_t, n_s)."""
+    """Median of FRAMES_PER_SAMPLE detections per camera, with shark's
+    floor_xy_mm shifted into the unified (= tiger) frame via
+    Settings.shark2tiger_delta_{x,y}. Returns
+    (x_tiger, y_tiger, x_shark_unified, y_shark_unified, n_t, n_s).
+    Cross-camera dx/dy is only meaningful when both coords are in the
+    same frame; without this shift dy ≈ shark2tiger_delta_y ≈ -1400 mm
+    swamps any real disagreement."""
+    dx_unify = float(Settings.shark2tiger_delta_x)
+    dy_unify = float(Settings.shark2tiger_delta_y)
     xs_t, ys_t, xs_s, ys_s = [], [], [], []
     for _ in range(FRAMES_PER_SAMPLE):
         dets_t, _ = tiger.get_aruco(draw=False, draw_world=False)
@@ -86,7 +116,8 @@ def sample_once(tiger, shark, target_id):
         if xy_t is not None:
             xs_t.append(xy_t[0]); ys_t.append(xy_t[1])
         if xy_s is not None:
-            xs_s.append(xy_s[0]); ys_s.append(xy_s[1])
+            xs_s.append(xy_s[0] + dx_unify)
+            ys_s.append(xy_s[1] + dy_unify)
         time.sleep(FRAME_INTERVAL_S)
     n_t, n_s = len(xs_t), len(xs_s)
     if n_t == 0 or n_s == 0:
