@@ -1,0 +1,19 @@
+{
+  "shark2tiger_delta_x_mm": 0.0,
+  "shark2tiger_delta_y_mm": -1920.0,
+  "physical_intercam_distance_mm": 2180.0,
+  "assumption": "cameras aligned in X; inter-camera vector is purely Y in the unified frame",
+  "derived_from": {
+    "tiger_C_in_tiger_frame_mm": [
+      -27.5,
+      -102.5
+    ],
+    "shark_C_in_shark_frame_mm": [
+      -27.5,
+      -362.5
+    ]
+  },
+  "source": "script_set_camera_center.py",
+  "env_snapshot": "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/CameraCenterSnapshots/env_0001_2026-05-26T12-41-56",
+  "saved_at": "2026-05-26T12:42:44"
+}

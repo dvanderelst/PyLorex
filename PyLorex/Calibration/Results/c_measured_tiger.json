@@ -1,0 +1,22 @@
+{
+  "camera_name": "tiger",
+  "Cx_mm": -27.5,
+  "Cy_mm": -102.5,
+  "Cz_mm": 2950.0,
+  "frame": "per-camera board (same frame as pose_{cam}.npz R, t)",
+  "click_arena_xy_mm": [
+    -27.5,
+    -102.5
+  ],
+  "applied_offset_to_unified_xy_mm": [
+    0.0,
+    0.0
+  ],
+  "source": "clicked stitched snapshot + tape-measured height",
+  "env_snapshot": "/home/dieter/Dropbox/PythonRepos/PyLorex/PyLorex/Calibration/CameraCenterSnapshots/env_0001_2026-05-26T12-41-56",
+  "click_pixel_uv": [
+    494,
+    421
+  ],
+  "saved_at": "2026-05-26T12:42:13"
+}
