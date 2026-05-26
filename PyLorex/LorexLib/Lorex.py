@@ -506,16 +506,39 @@ class LorexCamera:
                 if fa not in ("x", "y"): print(f"[warn] forward_axis={aruco_forward_axis!r} invalid; using 'x'"); fa = "x"
                 yaw_deg = yaw_from_R_board_tag(R_board_tag, fa, aruco_yaw_offset_deg)
 
-                # Step 3: correct the floor-plane (X, Y) to the marker's true
-                # height. C is the camera centre in board frame; back-project
-                # the ray through (X0, Y0, 0) to z = marker_height_mm using the
-                # same lambda = 1 - h/C_z formula the wall back-projection uses.
-                C = t_board_from_cam  # = -R.T @ t = camera centre in board frame
-                if C[2] > 0:
-                    lam = 1.0 - float(Settings.marker_height_mm) / float(C[2])
+                # Step 3: marker world position by distortion-aware ray-plane
+                # intersection at z = marker_height_mm. K + dist model lens
+                # distortion across the full FOV, so peripheral bias from
+                # H_raw's linear extrapolation outside the dot-grid
+                # calibration footprint is gone. PnP-derived R *and* C are
+                # used together — they are jointly fit by solvePnP and must
+                # be kept paired. Substituting a plumb-line "measured" C
+                # while keeping PnP R would shift this intersection by ~300
+                # mm at the principal point (an inconsistency between the
+                # ray's origin and direction). The user's plumb-line C is
+                # still used at the calibration level — script_set_camera_-
+                # center.py combines it with the tape-measured inter-camera
+                # distance to derive shark2tiger_delta_{x,y} — but at
+                # tracking time we keep PnP's (R, t) together.
+                # The previous H_raw + (lambda = 1 - h/C_z) formulation is
+                # preserved as a numerical fallback if the ray-plane setup
+                # degenerates (ray near-parallel to the floor, etc.).
+                C = np.asarray(t_board_from_cam, dtype=np.float64).reshape(3)
+                h_mm = float(Settings.marker_height_mm)
+                d_cam = hg.pixel_to_ray_cam(u, v, K_full, dist_full)
+                d_board = (R_board_from_cam @ d_cam.reshape(3)).reshape(3)
+                if abs(d_board[2]) > 1e-9 and C[2] > h_mm:
+                    # P(s) = C + s * d_board; solve P_z = h_mm.
+                    s = (h_mm - C[2]) / d_board[2]
+                    P = C + s * d_board
+                    X_floor = float(P[0])
+                    Y_floor = float(P[1])
+                    height_mm = h_mm
+                elif C[2] > h_mm:
+                    lam = 1.0 - h_mm / float(C[2])
                     X_floor = float(C[0] + lam * (X0 - C[0]))
                     Y_floor = float(C[1] + lam * (Y0 - C[1]))
-                height_mm = float(Settings.marker_height_mm)
+                    height_mm = h_mm
 
             det = {
                 "id": int(tag_id),
