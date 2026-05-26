@@ -16,3 +16,9 @@ PyLorex/Calibration/CameraCenterSnapshots/
 
 
 PyLorex/library/__pycache__/
+
+PyLorex/Markers/generated/
+
+PyLorex/Markers/
+
+PyLorex/LorexLib/temp/
