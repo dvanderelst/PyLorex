@@ -57,9 +57,15 @@ def print_pose_summary(camera_name):
     cos_off_vertical = float(np.clip(abs(z_cam_in_board[2]), -1.0, 1.0))
     tilt_off_vertical_deg = float(np.degrees(np.arccos(cos_off_vertical)))
 
-    # If c_measured_{cam}.json exists, it overrides the PnP C in Lorex.get_aruco
-    # (per-camera board frame, same frame as PnP). Show both so the printed
-    # summary matches what the live tracker is actually using.
+    # If c_measured_{cam}.json exists, show it alongside the PnP C as a
+    # diagnostic. The live tracker uses PnP's C (paired with PnP's R) in the
+    # ray-plane marker correction; c_measured is the plumb-line ground truth
+    # for the camera centre and feeds into the shark2tiger_delta derivation
+    # at calibration time. A large |meas - PnP| in Δxy flags that the
+    # PnP-derived camera centre is drifting from physical truth (which is
+    # expected on a planar dot-board calibration) but does NOT directly mean
+    # the tracker is mis-projecting at that magnitude — the bias the tracker
+    # actually shows is much smaller (~h/Cz · |Δxy|).
     c_meas_path = paths.get("c_measured_json")
     C_meas = None
     if c_meas_path and os.path.exists(c_meas_path):
@@ -72,21 +78,21 @@ def print_pose_summary(camera_name):
     print(f"  [{camera_name}]")
     print(f"     reproj RMSE : {s['reprojection_rmse_px']:.3f} px")
     print(f"     PnP    height/nadir : {float(C_pnp[2]):7.1f} mm  "
-          f"({float(C_pnp[0]):+7.1f}, {float(C_pnp[1]):+7.1f})")
+          f"({float(C_pnp[0]):+7.1f}, {float(C_pnp[1]):+7.1f})   "
+          f"<-- used by live tracker (ray-plane)")
     if C_meas is not None:
         d = C_meas - C_pnp
         print(f"     meas   height/nadir : {float(C_meas[2]):7.1f} mm  "
               f"({float(C_meas[0]):+7.1f}, {float(C_meas[1]):+7.1f})   "
-              f"<-- used by live tracker")
+              f"(plumb-line; calibration-only)")
         print(f"     meas - PnP          : "
               f"Δz {d[2]:+7.1f}    "
               f"Δxy ({d[0]:+7.1f}, {d[1]:+7.1f}) mm  "
               f"|Δxy|={float(np.hypot(d[0], d[1])):.1f}")
     else:
-        print("     (no c_measured_{cam}.json — live tracker uses PnP C)")
+        print("     (no c_measured_{cam}.json — run script_set_camera_center.py)")
     print(f"     optical-axis tilt off vertical: {tilt_off_vertical_deg:.2f} deg")
-    C_active = C_meas if C_meas is not None else C_pnp
-    return {"name": camera_name, "C": C_active, "C_pnp": C_pnp, "C_meas": C_meas,
+    return {"name": camera_name, "C": C_pnp, "C_pnp": C_pnp, "C_meas": C_meas,
             "rmse": s["reprojection_rmse_px"], "tilt_deg": tilt_off_vertical_deg}
 
 

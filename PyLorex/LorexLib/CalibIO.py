@@ -53,10 +53,14 @@ def load_pose_bundle(camera_name):
     # convenient derived
     bundle["K_inv"] = np.linalg.inv(bundle["K"])
 
-    # Optional override: measured camera centre in board frame (plumb-line +
-    # tape height). When present, downstream code (e.g. the marker-height
-    # correction in Lorex.get_aruco) should prefer this over the PnP-derived
-    # C = -R.T @ t, which is ambiguous on a single planar calibration board.
+    # Optional: measured camera centre in board frame (plumb-line + tape
+    # height). Used by the calibration tooling (script_set_camera_center.py
+    # derives shark2tiger_delta from these, and script_check_camera_-
+    # agreement.py prints PnP vs measured side-by-side as a diagnostic).
+    # NOT used by Lorex.get_aruco at tracking time — the marker pipeline
+    # keeps PnP's (R, t) paired (substituting measured C while keeping PnP
+    # R produces a ~300 mm inconsistency at the principal point; see the
+    # comment in Lorex.get_aruco for the explanation).
     c_path = p.get("c_measured_json")
     if c_path and os.path.exists(c_path):
         try:

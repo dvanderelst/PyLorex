@@ -1,31 +1,29 @@
-"""Set per-camera centre C = (Cx, Cy, Cz) by clicking floor markers in a
-freshly-captured stitched arena snapshot, then entering the tape-measured
-height.
+"""Anchor camera-system geometry to physical measurements. Click each
+camera's plumb-line floor mark in a freshly-captured stitched arena
+snapshot, enter its tape-measured height, then enter the tape-measured
+distance between the two floor marks.
 
-This is a calibration step you run *once* after physically marking each
-camera's nadir on the floor with tape. Re-run only when a camera or its
-mount moves.
+Run this once after physically marking each camera's nadir on the floor.
+Re-run only when a camera or its mount moves, or when the floor marks are
+re-plumbed.
 
-Why:
-    The marker-height correction (Lorex.get_aruco) needs the camera centre
-    C in the board frame. Until now this came from PnP via -R.T @ t, but
-    planar PnP on a single dot board is ambiguous; the resulting C can be
-    off by tens of mm in any axis and shows up as a U-shaped cross-camera
-    disagreement at the arena extremes (see handoff, 2026-05-22). With the
-    nadirs physically marked, the stitched arena snapshot (whose XY axes
-    are H_raw-correct at z=0) lets us read the true (Cx, Cy) directly.
-
-Pipeline:
-    1. Capture a fresh environment snapshot (cameras must be live; floor
-       markers must be visible).
-    2. For each camera in the snapshot, click its floor marker.
-    3. Enter the tape-measured Cz in the terminal.
-    4. Writes Calibration/Results/c_measured_{cam}.json — CalibIO.load_pose_bundle
-       picks this up automatically next time the tracker runs.
+What gets written (under PyLorex/Calibration/Results/):
+    - c_measured_{cam}.json: each camera's nadir in its OWN per-camera
+      board frame (same frame as pose_{cam}.npz R, t). Loaded by
+      CalibIO.load_pose_bundle into bundle["C_measured"]. Used by the
+      calibration tooling (this script + the agreement-check diagnostic),
+      NOT by Lorex.get_aruco at tracking time — the marker pipeline
+      keeps PnP's (R, t) jointly paired.
+    - camera_system.json: shark2tiger_delta_{x,y} derived from the two
+      c_measured files + the inter-camera physical distance. Read by
+      Settings.py at import time (with the hardcoded fallback for
+      first-run / config-absent cases). This is what actually changes
+      the runtime tracker's behaviour, by unifying shark's per-camera
+      board frame into tiger's.
 
 Verify afterwards with SCRIPT_ProbeTrackerAtWall.py (robot circle should
 sit flush against the green wall dots) and script_check_camera_agreement.py
-(the dy(x) U-shape should collapse).
+(cross-camera dy should be near zero in the FOV overlap region).
 
 Controls (per camera):
     Left-click  : place / move the crosshair.
@@ -144,9 +142,11 @@ def write_c_measured(camera_name: str, Cx_arena: float, Cy_arena: float, Cz: flo
     """Save C in each camera's PER-CAMERA board frame (same frame as R, t in
     pose_{cam}.npz, and as (X0, Y0) from H_raw). The stitched-snapshot click
     is in the UNIFIED arena frame, which equals tiger's board frame; shark's
-    board frame is offset from it by Settings.shark2tiger_delta_{x,y}. Saving
-    in per-camera frame means downstream code (Lorex.get_aruco) can use
-    bundle["C_measured"] directly without any per-camera special-case logic."""
+    board frame is offset from it by Settings.shark2tiger_delta_{x,y}, so we
+    undo that offset here before saving. Storing in per-camera frame keeps
+    c_measured directly comparable to the PnP-derived C = -R.T @ t and lets
+    derive_and_write_camera_system() compute the inter-camera offset from
+    the two values without further conversions."""
     if camera_name == "shark":
         dx_unified = float(Settings.shark2tiger_delta_x)
         dy_unified = float(Settings.shark2tiger_delta_y)
@@ -180,12 +180,13 @@ def write_c_measured(camera_name: str, Cx_arena: float, Cy_arena: float, Cz: flo
 
 
 def prompt_intercam_distance() -> Optional[float]:
-    """Prompt for the physical Euclidean distance (mm) between the two floor
-    nadir marks (e.g., from a tape measure). Returns None if skipped."""
+    """Prompt for the physical floor-plane distance (mm) between the two
+    floor nadir marks (e.g., from a tape measure along the floor). Returns
+    None if skipped."""
     print("\n[intercam] Physical inter-camera distance anchors the unified "
-          "frame to reality. Enter the tape-measured distance between the "
-          "two floor nadir marks (mm). Press ENTER to skip.")
-    raw = input("[intercam] physical distance between tiger and shark nadirs (mm): ").strip()
+          "frame to reality. Enter the tape-measured distance ALONG THE "
+          "FLOOR between the two nadir marks (mm). Press ENTER to skip.")
+    raw = input("[intercam] floor-plane distance between tiger and shark nadirs (mm): ").strip()
     if not raw:
         print("[intercam] skipped; camera_system.json not written.")
         return None
