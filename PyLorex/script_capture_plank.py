@@ -50,7 +50,7 @@ from pathlib import Path
 import cv2 as cv
 import numpy as np
 
-from LorexLib import Lorex
+from LorexLib import Lorex, Sound
 
 
 # ---------------- SETTINGS ----------------
@@ -60,6 +60,8 @@ GRAB_INTERVAL_S = 0.1              # spacing between the N grabs
 CAMERA_NAMES = ("tiger", "shark")
 PREVIEW_WIDTH = 1280               # downscale for the on-screen preview only
 SAVE_ROOT = Path(__file__).resolve().parent / "Calibration" / "PlankSnapshots"
+COUNTDOWN_PIPS = 2                 # number of 1-Hz pips after SPACE before capture
+STATUS_SPEAK_MIN_GAP_S = 1.5       # rate-limit detection-status announcements
 # ------------------------------------------
 
 
@@ -220,12 +222,20 @@ def main():
             print(f"[warn] wait_ready raised {e}; continuing anyway.")
 
     dictionary, params = get_aruco_handles()
+    sounds = Sound.SoundPlayer()
 
     snapshot_idx = 0
     history = []  # list of (snapshot_idx, snap_dir) for redo
+    last_status_spoken = (-1, -1)
+    last_status_speak_time = 0.0
 
     print("[capture] live preview running. "
           "SPACE = capture, R = redo last, Q/ESC = quit.")
+    sounds.speak(
+        "Plank capture ready. Move the plank into view. "
+        "Press space to capture, R to redo, Q to quit.",
+        volume=1.0, blocking=False,
+    )
     try:
         while True:
             # Live preview: one fresh frame per camera per loop iteration.
@@ -238,12 +248,15 @@ def main():
                     detects[n] = detect_markers(f, dictionary, params)
 
             previews = []
+            per_cam_target_count = {}
             for n in CAMERA_NAMES:
                 if n not in frames:
+                    per_cam_target_count[n] = 0
                     continue
                 vis = annotate(frames[n], detects[n], TARGET_IDS)
                 ids_str = sorted(detects[n].keys())
                 tgt_seen = sum(1 for i in TARGET_IDS if i in detects[n])
+                per_cam_target_count[n] = tgt_seen
                 status = (f"{n}: ids {ids_str}    "
                           f"target {tgt_seen}/{len(TARGET_IDS)}")
                 cv.putText(vis, status, (20, 50),
@@ -253,6 +266,18 @@ def main():
                            cv.FONT_HERSHEY_SIMPLEX, 1.2,
                            (0, 0, 0), 2, cv.LINE_AA)
                 previews.append(resize_for_preview(vis, PREVIEW_WIDTH))
+
+            # Audio: announce detection count when it changes, rate-limited.
+            t_count = per_cam_target_count.get("tiger", 0)
+            s_count = per_cam_target_count.get("shark", 0)
+            status_now = (t_count, s_count)
+            now = time.time()
+            if (status_now != last_status_spoken
+                    and (now - last_status_speak_time) >= STATUS_SPEAK_MIN_GAP_S):
+                sounds.speak(f"Tiger {t_count}. Shark {s_count}.",
+                             volume=0.6, blocking=False)
+                last_status_spoken = status_now
+                last_status_speak_time = now
 
             if previews:
                 stacked = np.vstack(previews)
@@ -277,13 +302,27 @@ def main():
                     shutil.rmtree(last_dir, ignore_errors=True)
                     snapshot_idx -= 1
                     print(f"[redo] removed snapshot {last_idx} ({last_dir.name})")
+                    sounds.speak("Snapshot deleted.",
+                                 volume=1.0, blocking=False)
                 else:
                     print("[redo] nothing to undo.")
+                    sounds.speak("Nothing to delete.",
+                                 volume=1.0, blocking=False)
                 continue
             if key == ord(' '):
                 print(f"\n[capture] snapshot {snapshot_idx + 1} ...")
+                # Countdown so the user can step out of the FOV.
+                sounds.speak("Move clear.", volume=1.0, blocking=False)
+                time.sleep(0.8)
+                for _ in range(COUNTDOWN_PIPS):
+                    sounds.play('pips', volume=0.4)
+                    time.sleep(1.0)
+                # Capture.
                 final = capture_one(cams, dictionary, params)
+                sounds.play('shutter', volume=1.0)
                 if final is None:
+                    sounds.speak("No frames. Try again.",
+                                 volume=1.0, blocking=False)
                     continue
                 snapshot_idx += 1
                 snap_dir = session_dir / f"snapshot_{snapshot_idx:03d}"
@@ -294,13 +333,27 @@ def main():
                 history.append((snapshot_idx, snap_dir))
                 t_tgt = sorted(i for i in t_detect if i in TARGET_IDS)
                 s_tgt = sorted(i for i in s_detect if i in TARGET_IDS)
+                t_n = len(t_tgt); s_n = len(s_tgt)
                 print(f"  tiger target ids: {t_tgt}    "
                       f"shark target ids: {s_tgt}")
                 print(f"  saved -> {snap_dir.name}")
+                sounds.speak(
+                    f"Snapshot {snapshot_idx}. Tiger {t_n}, shark {s_n}.",
+                    volume=1.0, blocking=False,
+                )
+                # Reset status tracker so the next "no change" detection
+                # of the same counts won't immediately re-announce.
+                last_status_spoken = (t_n, s_n)
+                last_status_speak_time = time.time()
 
     except KeyboardInterrupt:
         print("\n[interrupt] cleaning up ...")
     finally:
+        try:
+            sounds.speak(f"Done. {snapshot_idx} snapshots saved.",
+                         volume=1.0, blocking=True)
+        except Exception:
+            pass
         for c in cams.values():
             try:
                 c.stop()
