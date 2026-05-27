@@ -44,6 +44,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 import cv2 as cv
@@ -330,33 +331,54 @@ def residuals(params, observations, intrinsics_fixed, dist_full,
     return np.concatenate(out)
 
 
-def save_shark_pose(out_dir, R_shark, t_shark, src_bundle, original_pose_json):
-    """Write pose_shark_arena_frame.{json,npz} alongside the diagnostic
-    output. Mirrors the format of Calibration/Results/pose_shark.{json,npz}
-    so a copy-over is a drop-in replacement."""
+def save_camera_pose(out_dir, camera_name, R, t, K, dist,
+                     src_bundle, original_pose_json):
+    """Write pose_<camera>_arena_frame.{json,npz} carrying the bundle's
+    refined (R, t, K, dist) plus the unchanged H_raw / H_undistorted
+    from src_bundle. Format mirrors Calibration/Results/pose_<cam>.*
+    so a copy-over is a drop-in replacement for the runtime tracker."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    K = src_bundle["K"]
-    dist = src_bundle["dist"]
     H_raw = src_bundle.get("H_raw")
     H_undistorted = src_bundle.get("H_undistorted")
-    payload = dict(original_pose_json)  # copy so unchanged fields persist
-    payload["R_pnp"] = R_shark.tolist()
-    payload["t_pnp"] = t_shark.reshape(3, 1).tolist()
-    payload["frame"] = "tiger-anchored, plank-bundle-adjustment 2026-05-27"
+    payload = dict(original_pose_json)  # preserve metadata we don't touch
+    payload["R_pnp"] = np.asarray(R).tolist()
+    payload["t_pnp"] = np.asarray(t).reshape(3, 1).tolist()
+    payload["K_scaled"] = np.asarray(K).tolist()
+    payload["dist_coeffs"] = np.asarray(dist).flatten().tolist()
+    payload["frame"] = "tiger-anchored, plank-bundle-adjustment"
     payload["source"] = "script_calibrate_plank.py"
-    with open(out_dir / "pose_shark_arena_frame.json", "w") as f:
+    payload["saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with open(out_dir / f"pose_{camera_name}_arena_frame.json", "w") as f:
         json.dump(payload, f, indent=2)
     np.savez_compressed(
-        out_dir / "pose_shark_arena_frame.npz",
+        out_dir / f"pose_{camera_name}_arena_frame.npz",
         K_scaled=K, dist=dist,
         H_raw=H_raw if H_raw is not None else np.eye(3),
         H_undistorted=(H_undistorted if H_undistorted is not None else np.eye(3)),
-        R_pnp=R_shark, t_pnp=t_shark.reshape(3, 1),
+        R_pnp=np.asarray(R), t_pnp=np.asarray(t).reshape(3, 1),
         obj_mm=src_bundle.get("obj_mm", np.zeros((1, 2))),
         obj_xyz=np.zeros((1, 3)),
         img_pts=np.zeros((1, 2)),
         corners=np.zeros((1, 1, 2)),
     )
+
+
+def save_camera_system(out_dir, dx_mm=0.0, dy_mm=0.0):
+    """Write a zeroed camera_system.json next to the pose files. The
+    plank bundle places shark's (R, t) directly in tiger's frame, so the
+    legacy shark2tiger_delta_{x,y} offset should be zero after adoption."""
+    payload = {
+        "shark2tiger_delta_x_mm": float(dx_mm),
+        "shark2tiger_delta_y_mm": float(dy_mm),
+        "source": "script_calibrate_plank.py",
+        "note": "Bundle outputs already in tiger frame; delta is zero by construction.",
+        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    with open(out_dir / "camera_system_arena_frame.json", "w") as f:
+        json.dump(payload, f, indent=2)
+    return out_dir / "camera_system_arena_frame.json"
+
+
 
 
 def plot_frame(out_path, tiger_cal, R_shark, t_shark, plank_poses, plank_z,
@@ -606,15 +628,46 @@ def main():
           f"std {plank_residuals.std():.2f}   "
           f"|max| {np.max(np.abs(plank_residuals)):.2f}")
 
-    # Save shark pose.
-    src_bundle_shark = CalibIO.load_pose_bundle("shark")
-    with open(Path(Utils.get_calibration_paths("shark")["pose_json"])) as f:
-        original_pose_json = json.load(f)
-    save_shark_pose(session_dir, R_shark_new, t_shark_new,
-                    src_bundle_shark, original_pose_json)
-    print(f"\n[output] pose_shark_arena_frame.json/.npz -> {session_dir}")
-    print(f"         To make this canonical, copy to "
-          f"Calibration/Results/pose_shark.{{json,npz}}")
+    # Save a complete adoption-ready calibration set: both cameras'
+    # pose files (refined K, dist if REFINE_INTRINSICS was on) plus a
+    # zeroed camera_system.json (since the bundle places shark in tiger's
+    # frame by construction).
+    out_files = []
+    for c in cams:
+        src_bundle = CalibIO.load_pose_bundle(c)
+        with open(Path(Utils.get_calibration_paths(c)["pose_json"])) as f:
+            orig_pose_json = json.load(f)
+        if c == "tiger":
+            R_save = cal["tiger"]["R"]; t_save = cal["tiger"]["t"]
+        else:
+            R_save = R_shark_new; t_save = t_shark_new
+        if REFINE_INTRINSICS:
+            K_save = K_per_cam_new[c]; d_save = dist_per_cam_new[c]
+        else:
+            K_save = cal[c]["K"]; d_save = cal[c]["dist"]
+        save_camera_pose(session_dir, c, R_save, t_save, K_save, d_save,
+                         src_bundle, orig_pose_json)
+        out_files.append(session_dir / f"pose_{c}_arena_frame.json")
+        out_files.append(session_dir / f"pose_{c}_arena_frame.npz")
+    cs_path = save_camera_system(session_dir, dx_mm=0.0, dy_mm=0.0)
+    out_files.append(cs_path)
+
+    print(f"\n[output] adoption-ready files in {session_dir}:")
+    for p in out_files:
+        print(f"           {p.name}")
+    print("\n[adopt] To make this calibration canonical:")
+    canon = "PyLorex/PyLorex/Calibration/Results"
+    relsess = session_dir.relative_to(Path(__file__).resolve().parent.parent.parent)
+    print(f"           cd {canon}")
+    print(f"           # back up the current calibration first")
+    print(f"           for f in pose_tiger.{{json,npz}} pose_shark.{{json,npz}} camera_system.json; do "
+          f"cp -n $f $f.pre-arena-frame.bak; done")
+    print(f"           # copy the new calibration into place")
+    print(f"           cp {relsess}/pose_tiger_arena_frame.json   pose_tiger.json")
+    print(f"           cp {relsess}/pose_tiger_arena_frame.npz    pose_tiger.npz")
+    print(f"           cp {relsess}/pose_shark_arena_frame.json   pose_shark.json")
+    print(f"           cp {relsess}/pose_shark_arena_frame.npz    pose_shark.npz")
+    print(f"           cp {relsess}/camera_system_arena_frame.json camera_system.json")
 
     # Save bundle metadata.
     bundle_info = {
