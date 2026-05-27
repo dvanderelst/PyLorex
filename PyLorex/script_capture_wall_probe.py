@@ -1,7 +1,7 @@
 """Quantitative wall-probe diagnostic.
 
 For each capture, the script:
-  - Grabs synchronised tiger + shark frames.
+  - Grabs synchronised tiger + sark frames.
   - Detects the robot's ArUco marker in both.
   - Via the current calibration (PyLorex K, dist, R, t + ray-plane
     intersection at z = robot marker height), projects each camera's
@@ -331,7 +331,7 @@ def main():
     stable_count = 0
     halfway_announced = False
     cooldown_until = 0.0
-    last_status_spoken_t = (-99, -99, -99)
+    last_status_spoken_t = (-99, -99)
     last_status_speak_time = 0.0
     rows = []
 
@@ -419,12 +419,12 @@ def main():
                 "cameras": per_cam_payload,
             }, f, indent=2)
         history.append((snapshot_idx, snap_dir))
-        # Announce result.
+        # Announce result — keep it terse so the audio cycle stays short.
         if per_cam_bias:
-            parts = [f"{cam} {int(round(b)):+d}" for cam, b in per_cam_bias.items()]
-            announce = f"Snapshot {snapshot_idx}. Bias " + ", ".join(parts) + ". Move robot."
+            parts = [f"{int(round(b)):+d}" for b in per_cam_bias.values()]
+            announce = f"{snapshot_idx}. " + " ".join(parts) + "."
         else:
-            announce = f"Snapshot {snapshot_idx}. Robot not detected. Move robot."
+            announce = f"{snapshot_idx}. No robot."
         sounds.speak(announce, volume=1.0, blocking=False)
         print(f"  bias per camera: {per_cam_bias}")
         # Reset state.
@@ -466,25 +466,27 @@ def main():
                                robot_xy, wall_d, cam)
                 previews.append(resize_for_preview(vis, PREVIEW_WIDTH))
 
-            # Live bias status (announce on change).
-            t_b = (int(robot_xy["tiger"][0]) if "tiger" in robot_xy else None,
-                   int(robot_xy["tiger"][1]) if "tiger" in robot_xy else None,
-                   int(wall_d["tiger"] - ROBOT_RADIUS_MM) if "tiger" in wall_d else None)
-            s_b = (int(robot_xy["shark"][0]) if "shark" in robot_xy else None,
-                   int(robot_xy["shark"][1]) if "shark" in robot_xy else None,
-                   int(wall_d["shark"] - ROBOT_RADIUS_MM) if "shark" in wall_d else None)
-            status_now = (t_b[2], s_b[2], int(robot_xy.get("tiger", [0])[0]) // 100)
+            # Live audio: only speak when "which cameras see the robot"
+            # changes — much quieter than announcing the bias on every
+            # change. Per-capture result still gets a full spoken summary.
+            see_now = tuple(int(c in robot_xy) for c in CAMERA_NAMES)
             now = time.time()
-            if (status_now != last_status_spoken_t
+            if (see_now != last_status_spoken_t
                     and (now - last_status_speak_time) >= STATUS_SPEAK_MIN_GAP_S):
-                if t_b[2] is not None or s_b[2] is not None:
-                    parts = []
-                    if t_b[2] is not None:
-                        parts.append(f"tiger bias {t_b[2]:+d}")
-                    if s_b[2] is not None:
-                        parts.append(f"shark bias {s_b[2]:+d}")
-                    sounds.speak(". ".join(parts), volume=0.55, blocking=False)
-                last_status_spoken_t = status_now
+                t_seen, s_seen = see_now
+                if not t_seen and not s_seen:
+                    msg = "Robot not visible."
+                elif t_seen and not s_seen:
+                    msg = "Tiger only."
+                elif s_seen and not t_seen:
+                    msg = "Shark only."
+                else:
+                    msg = "Both cameras."
+                # Skip the very first state announcement at startup so the
+                # opening greeting isn't immediately stepped on.
+                if last_status_spoken_t != (-99, -99):
+                    sounds.speak(msg, volume=0.55, blocking=False)
+                last_status_spoken_t = see_now
                 last_status_speak_time = now
 
             # Auto-capture.
