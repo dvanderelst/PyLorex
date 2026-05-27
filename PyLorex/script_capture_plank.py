@@ -66,23 +66,32 @@ STATUS_SPEAK_MIN_GAP_S = 1.5       # rate-limit detection-status announcements
 
 
 def get_aruco_handles():
-    """Return (dictionary, detectorParameters). Compatible with both the
-    older cv.aruco.DetectorParameters_create() and the newer
-    cv.aruco.DetectorParameters() APIs."""
+    """Return (dictionary, params, detector_or_None). Mirrors the
+    new-vs-old OpenCV ArUco API selection from LorexLib.Lorex: prefer
+    the ArucoDetector class when available; fall back to free-function
+    cv.aruco.detectMarkers otherwise. DetectorParameters constructor
+    also differs across versions."""
     dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_1000)
     try:
         params = cv.aruco.DetectorParameters()
     except AttributeError:
         params = cv.aruco.DetectorParameters_create()
-    return dictionary, params
+    detector = None
+    if hasattr(cv.aruco, "ArucoDetector"):
+        detector = cv.aruco.ArucoDetector(dictionary, params)
+    return dictionary, params, detector
 
 
-def detect_markers(frame_bgr, dictionary, params):
+def detect_markers(frame_bgr, dictionary, params, detector):
     """Return {id: corners (4x2 in pixel coords)} for all detected markers."""
     if frame_bgr is None:
         return {}
     gray = cv.cvtColor(frame_bgr, cv.COLOR_BGR2GRAY)
-    corners, ids, _ = cv.aruco.detectMarkers(gray, dictionary, parameters=params)
+    if detector is not None:
+        corners, ids, _ = detector.detectMarkers(gray)
+    else:
+        corners, ids, _ = cv.aruco.detectMarkers(
+            gray, dictionary, parameters=params)
     if ids is None:
         return {}
     out = {}
@@ -162,7 +171,7 @@ def write_snapshot(snap_dir, snapshot_idx,
         json.dump(payload, f, indent=2)
 
 
-def capture_one(cams, dictionary, params):
+def capture_one(cams, dictionary, params, detector):
     """Grab N frames from each camera, median frame + median per-corner
     detections per marker. Returns {cam_name: (median_frame, {id: 4x2})}
     or None on failure."""
@@ -173,7 +182,7 @@ def capture_one(cams, dictionary, params):
             f = cams[n].get_frame(undistort=False)
             if f is not None:
                 grabs[n].append(f)
-                detect_lists[n].append(detect_markers(f, dictionary, params))
+                detect_lists[n].append(detect_markers(f, dictionary, params, detector))
         time.sleep(GRAB_INTERVAL_S)
 
     final = {}
@@ -221,7 +230,7 @@ def main():
         except Exception as e:
             print(f"[warn] wait_ready raised {e}; continuing anyway.")
 
-    dictionary, params = get_aruco_handles()
+    dictionary, params, detector = get_aruco_handles()
     sounds = Sound.SoundPlayer()
 
     snapshot_idx = 0
@@ -245,7 +254,7 @@ def main():
                 f = cams[n].get_frame(undistort=False)
                 if f is not None:
                     frames[n] = f
-                    detects[n] = detect_markers(f, dictionary, params)
+                    detects[n] = detect_markers(f, dictionary, params, detector)
 
             previews = []
             per_cam_target_count = {}
@@ -318,7 +327,7 @@ def main():
                     sounds.play('pips', volume=0.4)
                     time.sleep(1.0)
                 # Capture.
-                final = capture_one(cams, dictionary, params)
+                final = capture_one(cams, dictionary, params, detector)
                 sounds.play('shutter', volume=1.0)
                 if final is None:
                     sounds.speak("No frames. Try again.",
