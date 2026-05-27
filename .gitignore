@@ -13,6 +13,7 @@ PyLorex/Temp/
 PyLorex/OldStuff/
 PyLorex/Environment/
 PyLorex/Calibration/CameraCenterSnapshots/
+PyLorex/Calibration/PlankSnapshots/
 
 
 PyLorex/library/__pycache__/
