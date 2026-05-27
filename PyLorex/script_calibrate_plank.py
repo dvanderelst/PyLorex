@@ -72,6 +72,35 @@ KNOWN_PAIRS_MM = {(75, 76): 500.0, (76, 77): 500.0, (75, 77): 1000.0}
 # If you remount markers with a different orientation, change this value.
 MARKER_TO_PLANK_YAW_DEG = 90.0
 
+# Intrinsics refinement: when True, the bundle also solves for K and the
+# leading distortion coefficients per camera. Useful when the bundle's
+# inter-camera distance disagrees with an external (tape) measurement —
+# that disagreement is often intrinsic scale bias, and unfreezing K
+# lets the data dictate the right values. When False, K + dist stay at
+# their existing calibrated values and only extrinsics + plank poses
+# move (the original behaviour).
+REFINE_INTRINSICS = True
+# Per-camera intrinsic params we let vary: fx, fy, cx, cy, k1, k2.
+# (k3, p1, p2 left at their existing values — usually small and
+# under-determined by a planar floor target.)
+N_INTRINSIC_PARAMS = 6
+
+# Soft regularization toward the original (checkerboard-calibrated)
+# intrinsic values. Sigmas express "how far the bundle is allowed to
+# move each intrinsic before incurring 1 sigma worth of cost". With
+# only a single z-plane of markers, the focal-length / depth degeneracy
+# is severe — without these priors the bundle drifts fx by 30%+ to a
+# non-physical solution. Conservative sigmas keep it tethered while
+# still allowing genuine percent-level corrections.
+INTRINSIC_SIGMAS = {
+    "fx": 25.0,     # ~1% of typical fx (~2400 px)
+    "fy": 25.0,
+    "cx": 30.0,     # principal point should be within ~30 px of nominal
+    "cy": 30.0,
+    "k1": 0.02,
+    "k2": 0.02,
+}
+
 _MARKER_CORNERS_LOCAL = np.array([
     [-MARKER_HALF_SIZE_MM, +MARKER_HALF_SIZE_MM, 0.0],  # TL
     [+MARKER_HALF_SIZE_MM, +MARKER_HALF_SIZE_MM, 0.0],  # TR
@@ -209,21 +238,64 @@ def project_world_to_image(world_pts, K, dist, R, t):
     return proj.reshape(-1, 2)
 
 
-def unpack(params, n_snaps):
+def unpack(params, n_snaps, refine_intrinsics, dist_full):
+    """Unpack the optimizer's flat parameter vector.
+
+    Layout when refine_intrinsics:
+        [shark_rvec(3), shark_t(3),
+         tiger_intrinsics(N_INTRINSIC_PARAMS),
+         shark_intrinsics(N_INTRINSIC_PARAMS),
+         plank_poses(3 per snap)]
+    Layout otherwise:
+        [shark_rvec(3), shark_t(3),
+         plank_poses(3 per snap)]
+
+    Intrinsics packing per camera: [fx, fy, cx, cy, k1, k2]. The full
+    dist coefficient vector keeps k3, p1, p2 at their original values
+    (from dist_full[cam])."""
     shark_rvec = params[:3]
     shark_t = params[3:6]
-    plank_poses = params[6:].reshape(n_snaps, 3)
     R_shark, _ = cv.Rodrigues(shark_rvec.reshape(3, 1))
-    return R_shark, shark_t, plank_poses
+    if refine_intrinsics:
+        ti = params[6:6 + N_INTRINSIC_PARAMS]
+        si = params[6 + N_INTRINSIC_PARAMS:6 + 2 * N_INTRINSIC_PARAMS]
+        plank_poses = params[6 + 2 * N_INTRINSIC_PARAMS:].reshape(n_snaps, 3)
+
+        def build(intrin_vec, dist_orig):
+            fx, fy, cx, cy, k1, k2 = intrin_vec
+            K = np.array([[fx, 0.0, cx],
+                          [0.0, fy, cy],
+                          [0.0, 0.0, 1.0]])
+            dist = np.array(dist_orig, dtype=np.float64).flatten()
+            dist[0] = k1
+            dist[1] = k2
+            return K, dist
+
+        K_t, dist_t = build(ti, dist_full["tiger"])
+        K_s, dist_s = build(si, dist_full["shark"])
+        K_per_cam = {"tiger": K_t, "shark": K_s}
+        dist_per_cam = {"tiger": dist_t, "shark": dist_s}
+    else:
+        plank_poses = params[6:].reshape(n_snaps, 3)
+        K_per_cam = None
+        dist_per_cam = None
+    return R_shark, shark_t, K_per_cam, dist_per_cam, plank_poses
 
 
-def residuals(params, observations, intrinsics, tiger_pose, n_snaps, plank_z):
-    """Return concatenated reprojection residuals across all observations.
+def residuals(params, observations, intrinsics_fixed, dist_full,
+              tiger_pose, n_snaps, plank_z, refine_intrinsics,
+              intrinsic_priors=None):
+    """Reprojection residuals across all observations, plus (when
+    refine_intrinsics) soft regularization residuals tethering each
+    intrinsic param to its initial value with INTRINSIC_SIGMAS scaling.
 
-    observations: list of dicts with keys snap_idx, camera, marker_id,
-                  corners_px (4x2 image pixels).
-    """
-    R_shark, t_shark, plank_poses = unpack(params, n_snaps)
+    intrinsics_fixed: {cam: (K, dist)} used when refine_intrinsics=False.
+    dist_full: {cam: original full dist vector} -- seeds the unchanged
+        higher-order distortion coefficients when refine_intrinsics=True.
+    intrinsic_priors: {cam: (fx0, fy0, cx0, cy0, k10, k20)} initial
+        values + INTRINSIC_SIGMAS -> regularization residuals."""
+    R_shark, t_shark, K_per_cam_new, dist_per_cam_new, plank_poses = unpack(
+        params, n_snaps, refine_intrinsics, dist_full)
     R_tiger, t_tiger = tiger_pose
     out = []
     for obs in observations:
@@ -233,12 +305,28 @@ def residuals(params, observations, intrinsics, tiger_pose, n_snaps, plank_z):
         corners_px = obs["corners_px"]
         plank_xyz = plank_poses[snap_i]
         world_corners = plank_pose_to_world_corners(plank_xyz, mid, plank_z)
-        K, dist = intrinsics[cam]
+        if refine_intrinsics:
+            K = K_per_cam_new[cam]
+            dist = dist_per_cam_new[cam]
+        else:
+            K, dist = intrinsics_fixed[cam]
         if cam == "tiger":
             proj = project_world_to_image(world_corners, K, dist, R_tiger, t_tiger)
         else:
             proj = project_world_to_image(world_corners, K, dist, R_shark, t_shark)
         out.append((proj - corners_px).flatten())
+
+    # Intrinsic regularization residuals (one per varied param per camera).
+    if refine_intrinsics and intrinsic_priors is not None:
+        sigmas = np.array([INTRINSIC_SIGMAS["fx"], INTRINSIC_SIGMAS["fy"],
+                           INTRINSIC_SIGMAS["cx"], INTRINSIC_SIGMAS["cy"],
+                           INTRINSIC_SIGMAS["k1"], INTRINSIC_SIGMAS["k2"]])
+        for c in ("tiger", "shark"):
+            K_now = K_per_cam_new[c]; d_now = dist_per_cam_new[c]
+            now = np.array([K_now[0, 0], K_now[1, 1], K_now[0, 2], K_now[1, 2],
+                            d_now[0], d_now[1]])
+            init = intrinsic_priors[c]
+            out.append((now - init) / sigmas)
     return np.concatenate(out)
 
 
@@ -340,9 +428,18 @@ def plot_frame(out_path, tiger_cal, R_shark, t_shark, plank_poses, plank_z,
     plt.close(fig)
 
 
-def reprojection_rmse(observations, params, intrinsics, tiger_pose, n_snaps, plank_z):
-    res = residuals(params, observations, intrinsics, tiger_pose, n_snaps, plank_z)
-    return float(np.sqrt(np.mean(res ** 2)))
+def reprojection_rmse(observations, params, intrinsics_fixed, dist_full,
+                      tiger_pose, n_snaps, plank_z, refine_intrinsics,
+                      intrinsic_priors=None):
+    """Reprojection RMSE based ONLY on the image-pixel residuals (i.e.,
+    excludes the intrinsic-regularization residuals so the number stays
+    interpretable as 'mean pixel error per corner coord')."""
+    res_all = residuals(params, observations, intrinsics_fixed, dist_full,
+                        tiger_pose, n_snaps, plank_z, refine_intrinsics,
+                        intrinsic_priors=intrinsic_priors)
+    n_image_residuals = len(observations) * 4 * 2  # 4 corners * 2 dims each
+    res_img = res_all[:n_image_residuals]
+    return float(np.sqrt(np.mean(res_img ** 2)))
 
 
 def main():
@@ -413,31 +510,75 @@ def main():
 
     # Initial param vector.
     shark_rvec_init, _ = cv.Rodrigues(cal["shark"]["R"])
-    x0 = np.concatenate([
-        shark_rvec_init.flatten(),
-        cal["shark"]["t"].reshape(3),
-        np.asarray(plank_poses_init).flatten(),
-    ])
+    dist_full = {c: np.asarray(cal[c]["dist"], dtype=np.float64).flatten()
+                 for c in cams}
 
-    rmse_before = reprojection_rmse(observations, x0, intrinsics,
-                                    tiger_pose, n_snaps, plank_z)
+    parts = [shark_rvec_init.flatten(), cal["shark"]["t"].reshape(3)]
+    intrinsic_priors = None
+    if REFINE_INTRINSICS:
+        intrinsic_priors = {}
+        for c in ("tiger", "shark"):
+            K_c = cal[c]["K"]; d_c = dist_full[c]
+            init_vec = np.array([K_c[0, 0], K_c[1, 1], K_c[0, 2], K_c[1, 2],
+                                 d_c[0], d_c[1]])
+            parts.append(init_vec)
+            intrinsic_priors[c] = init_vec.copy()
+    parts.append(np.asarray(plank_poses_init).flatten())
+    x0 = np.concatenate(parts)
+
+    rmse_before = reprojection_rmse(observations, x0, intrinsics, dist_full,
+                                    tiger_pose, n_snaps, plank_z,
+                                    REFINE_INTRINSICS,
+                                    intrinsic_priors=intrinsic_priors)
     print(f"[init ] reprojection RMSE: {rmse_before:.3f} px "
           f"(initial guess, before bundle)")
+    if REFINE_INTRINSICS:
+        print(f"[mode ] refining intrinsics with priors "
+              f"(sigmas fx/fy={INTRINSIC_SIGMAS['fx']}, "
+              f"cx/cy={INTRINSIC_SIGMAS['cx']}, k1/k2={INTRINSIC_SIGMAS['k1']})")
+    else:
+        print(f"[mode ] extrinsics only")
 
     # Bundle adjustment.
     print("[solve] running least_squares (TRF, huber loss) ...")
     result = least_squares(
         residuals, x0,
-        args=(observations, intrinsics, tiger_pose, n_snaps, plank_z),
-        method="trf", loss="huber", f_scale=2.0,  # robustly handle outliers
-        max_nfev=200, verbose=1,
+        args=(observations, intrinsics, dist_full,
+              tiger_pose, n_snaps, plank_z, REFINE_INTRINSICS,
+              intrinsic_priors),
+        method="trf", loss="huber", f_scale=2.0,
+        max_nfev=500, verbose=1, x_scale="jac",
     )
-    rmse_after = reprojection_rmse(observations, result.x, intrinsics,
-                                   tiger_pose, n_snaps, plank_z)
+    rmse_after = reprojection_rmse(observations, result.x, intrinsics, dist_full,
+                                   tiger_pose, n_snaps, plank_z,
+                                   REFINE_INTRINSICS,
+                                   intrinsic_priors=intrinsic_priors)
     print(f"[done ] reprojection RMSE: {rmse_after:.3f} px "
           f"(after bundle; was {rmse_before:.3f})")
 
-    R_shark_new, t_shark_new, plank_poses_new = unpack(result.x, n_snaps)
+    R_shark_new, t_shark_new, K_per_cam_new, dist_per_cam_new, plank_poses_new = \
+        unpack(result.x, n_snaps, REFINE_INTRINSICS, dist_full)
+
+    if REFINE_INTRINSICS:
+        print(f"\n[intrinsics refinement]")
+        for c in ("tiger", "shark"):
+            K_old = cal[c]["K"]; d_old = dist_full[c]
+            K_new = K_per_cam_new[c]; d_new = dist_per_cam_new[c]
+            print(f"  [{c}]")
+            print(f"    fx: {K_old[0,0]:8.2f}  ->  {K_new[0,0]:8.2f}  "
+                  f"(delta {K_new[0,0]-K_old[0,0]:+7.2f}, "
+                  f"{(K_new[0,0]/K_old[0,0]-1)*100:+5.2f}%)")
+            print(f"    fy: {K_old[1,1]:8.2f}  ->  {K_new[1,1]:8.2f}  "
+                  f"(delta {K_new[1,1]-K_old[1,1]:+7.2f}, "
+                  f"{(K_new[1,1]/K_old[1,1]-1)*100:+5.2f}%)")
+            print(f"    cx: {K_old[0,2]:8.2f}  ->  {K_new[0,2]:8.2f}  "
+                  f"(delta {K_new[0,2]-K_old[0,2]:+7.2f})")
+            print(f"    cy: {K_old[1,2]:8.2f}  ->  {K_new[1,2]:8.2f}  "
+                  f"(delta {K_new[1,2]-K_old[1,2]:+7.2f})")
+            print(f"    k1: {d_old[0]:+8.4f}  ->  {d_new[0]:+8.4f}  "
+                  f"(delta {d_new[0]-d_old[0]:+7.4f})")
+            print(f"    k2: {d_old[1]:+8.4f}  ->  {d_new[1]:+8.4f}  "
+                  f"(delta {d_new[1]-d_old[1]:+7.4f})")
 
     # Sanity numbers in the new frame.
     C_tiger = -cal["tiger"]["R"].T @ cal["tiger"]["t"]
