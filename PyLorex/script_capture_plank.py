@@ -58,10 +58,21 @@ TARGET_IDS = (75, 76, 77)
 N_GRABS_PER_CAPTURE = 3            # median over N frames per camera per snapshot
 GRAB_INTERVAL_S = 0.1              # spacing between the N grabs
 CAMERA_NAMES = ("tiger", "shark")
-PREVIEW_WIDTH = 1280               # downscale for the on-screen preview only
+PREVIEW_WIDTH = 800               # downscale for the on-screen preview only
 SAVE_ROOT = Path(__file__).resolve().parent / "Calibration" / "PlankSnapshots"
 COUNTDOWN_PIPS = 2                 # number of 1-Hz pips after SPACE before capture
 STATUS_SPEAK_MIN_GAP_S = 1.5       # rate-limit detection-status announcements
+
+# Auto-capture: script triggers a capture by itself when the plank has
+# been stationary for AUTO_STABLE_FRAMES_REQUIRED preview frames in a row
+# (with at least 2 target markers visible). Lets the user place + walk
+# away + wait, without needing to come back to the keyboard each time.
+AUTO_CAPTURE_ENABLED = True
+AUTO_STABLE_FRAMES_REQUIRED = 20   # ~2 s at the preview loop's ~10 Hz
+AUTO_STABLE_PIXELS = 1.5            # max per-frame corner motion to count "stable"
+AUTO_MIN_TARGETS_SEEN = 2           # require >=N target markers visible in some cam
+AUTO_COOLDOWN_S = 5.0               # min seconds between auto-captures
+AUTO_HOLDING_ANNOUNCE_FRACTION = 0.5  # speak "Holding" at this fraction of stable period
 # ------------------------------------------
 
 
@@ -98,6 +109,32 @@ def detect_markers(frame_bgr, dictionary, params, detector):
     for c, i in zip(corners, ids.flatten()):
         out[int(i)] = c.reshape(-1, 2)
     return out
+
+
+def is_frame_stable(detects, prev_detects, target_ids, threshold_px):
+    """True iff (a) at least one target marker is visible in at least one
+    camera, and (b) every currently-visible target marker was *also*
+    visible in the previous frame and its 4 corner pixels haven't moved
+    by more than threshold_px in any coordinate. Newly-appeared markers
+    count as not-stable (something is moving)."""
+    visible_now = set()
+    for det in detects.values():
+        for mid in target_ids:
+            if mid in det:
+                visible_now.add(mid)
+    if not visible_now:
+        return False
+    for cam_name, det in detects.items():
+        prev = prev_detects.get(cam_name, {})
+        for mid in target_ids:
+            if mid not in det:
+                continue
+            if mid not in prev:
+                return False
+            max_move = float(np.max(np.abs(det[mid] - prev[mid])))
+            if max_move > threshold_px:
+                return False
+    return True
 
 
 def median_corners(detection_lists, marker_id):
@@ -237,12 +274,69 @@ def main():
     history = []  # list of (snapshot_idx, snap_dir) for redo
     last_status_spoken = (-1, -1)
     last_status_speak_time = 0.0
+    prev_detects = {n: {} for n in CAMERA_NAMES}
+    stable_count = 0
+    halfway_announced = False
+    cooldown_until = 0.0
+
+    def do_capture(reason):
+        """Run the capture sequence. reason is 'manual' (SPACE) or 'auto'.
+        Mutates: snapshot_idx, history, last_status_spoken,
+        last_status_speak_time, stable_count, halfway_announced, cooldown_until.
+        Returns True on success, False on failure."""
+        nonlocal snapshot_idx, last_status_spoken, last_status_speak_time
+        nonlocal stable_count, halfway_announced, cooldown_until
+        print(f"\n[capture] snapshot {snapshot_idx + 1} ({reason}) ...")
+        if reason == "manual":
+            sounds.speak("Move clear.", volume=1.0, blocking=False)
+            time.sleep(0.8)
+            for _ in range(COUNTDOWN_PIPS):
+                sounds.play('pips', volume=0.4)
+                time.sleep(1.0)
+        else:  # auto
+            sounds.play('pips', volume=0.5)
+            time.sleep(0.4)
+        final = capture_one(cams, dictionary, params, detector)
+        sounds.play('shutter', volume=1.0)
+        if final is None:
+            sounds.speak("No frames. Try again.",
+                         volume=1.0, blocking=False)
+            return False
+        snapshot_idx += 1
+        snap_dir = session_dir / f"snapshot_{snapshot_idx:03d}"
+        t_frame, t_detect = final["tiger"]
+        s_frame, s_detect = final["shark"]
+        write_snapshot(snap_dir, snapshot_idx,
+                       t_frame, s_frame, t_detect, s_detect)
+        history.append((snapshot_idx, snap_dir))
+        t_tgt = sorted(i for i in t_detect if i in TARGET_IDS)
+        s_tgt = sorted(i for i in s_detect if i in TARGET_IDS)
+        t_n = len(t_tgt); s_n = len(s_tgt)
+        print(f"  tiger target ids: {t_tgt}    "
+              f"shark target ids: {s_tgt}")
+        print(f"  saved -> {snap_dir.name}")
+        suffix = " Move plank." if reason == "auto" else ""
+        sounds.speak(
+            f"Snapshot {snapshot_idx}. Tiger {t_n}, shark {s_n}.{suffix}",
+            volume=1.0, blocking=False,
+        )
+        last_status_spoken = (t_n, s_n)
+        last_status_speak_time = time.time()
+        stable_count = 0
+        halfway_announced = False
+        cooldown_until = time.time() + AUTO_COOLDOWN_S
+        return True
 
     print("[capture] live preview running. "
-          "SPACE = capture, R = redo last, Q/ESC = quit.")
+          + ("AUTO mode: place plank, walk away, wait for capture. "
+             if AUTO_CAPTURE_ENABLED else "")
+          + "SPACE = manual capture, R = redo last, Q/ESC = quit.")
     sounds.speak(
-        "Plank capture ready. Move the plank into view. "
-        "Press space to capture, R to redo, Q to quit.",
+        ("Plank capture ready. " +
+         ("Auto mode is on. Place the plank, step away, and wait. "
+          if AUTO_CAPTURE_ENABLED else
+          "Move the plank into view. Press space to capture. ") +
+         "Press R to redo, Q to quit."),
         volume=1.0, blocking=False,
     )
     try:
@@ -288,6 +382,30 @@ def main():
                 last_status_spoken = status_now
                 last_status_speak_time = now
 
+            # Auto-capture: detect plank stillness, trigger capture when
+            # the plank has been stationary long enough AND we're past the
+            # post-capture cooldown.
+            auto_triggered = False
+            if AUTO_CAPTURE_ENABLED:
+                sees_enough = (t_count >= AUTO_MIN_TARGETS_SEEN
+                               or s_count >= AUTO_MIN_TARGETS_SEEN)
+                stable_now = (sees_enough
+                              and is_frame_stable(detects, prev_detects,
+                                                  TARGET_IDS, AUTO_STABLE_PIXELS))
+                if stable_now:
+                    stable_count += 1
+                else:
+                    stable_count = 0
+                    halfway_announced = False
+                if (not halfway_announced
+                        and stable_count >= int(AUTO_STABLE_FRAMES_REQUIRED
+                                                * AUTO_HOLDING_ANNOUNCE_FRACTION)):
+                    sounds.speak("Holding.", volume=0.6, blocking=False)
+                    halfway_announced = True
+                if (stable_count >= AUTO_STABLE_FRAMES_REQUIRED
+                        and time.time() >= cooldown_until):
+                    auto_triggered = True
+
             if previews:
                 stacked = np.vstack(previews)
                 footer = (f"snapshots saved: {snapshot_idx}    "
@@ -317,43 +435,19 @@ def main():
                     print("[redo] nothing to undo.")
                     sounds.speak("Nothing to delete.",
                                  volume=1.0, blocking=False)
+                # do_capture would have reset prev_detects implicitly via
+                # cooldown; on a delete we don't need to do anything.
+                prev_detects = detects
                 continue
             if key == ord(' '):
-                print(f"\n[capture] snapshot {snapshot_idx + 1} ...")
-                # Countdown so the user can step out of the FOV.
-                sounds.speak("Move clear.", volume=1.0, blocking=False)
-                time.sleep(0.8)
-                for _ in range(COUNTDOWN_PIPS):
-                    sounds.play('pips', volume=0.4)
-                    time.sleep(1.0)
-                # Capture.
-                final = capture_one(cams, dictionary, params, detector)
-                sounds.play('shutter', volume=1.0)
-                if final is None:
-                    sounds.speak("No frames. Try again.",
-                                 volume=1.0, blocking=False)
-                    continue
-                snapshot_idx += 1
-                snap_dir = session_dir / f"snapshot_{snapshot_idx:03d}"
-                t_frame, t_detect = final["tiger"]
-                s_frame, s_detect = final["shark"]
-                write_snapshot(snap_dir, snapshot_idx,
-                               t_frame, s_frame, t_detect, s_detect)
-                history.append((snapshot_idx, snap_dir))
-                t_tgt = sorted(i for i in t_detect if i in TARGET_IDS)
-                s_tgt = sorted(i for i in s_detect if i in TARGET_IDS)
-                t_n = len(t_tgt); s_n = len(s_tgt)
-                print(f"  tiger target ids: {t_tgt}    "
-                      f"shark target ids: {s_tgt}")
-                print(f"  saved -> {snap_dir.name}")
-                sounds.speak(
-                    f"Snapshot {snapshot_idx}. Tiger {t_n}, shark {s_n}.",
-                    volume=1.0, blocking=False,
-                )
-                # Reset status tracker so the next "no change" detection
-                # of the same counts won't immediately re-announce.
-                last_status_spoken = (t_n, s_n)
-                last_status_speak_time = time.time()
+                do_capture("manual")
+                prev_detects = detects
+                continue
+            if auto_triggered:
+                do_capture("auto")
+
+            # Track detection corners between frames for the stability check.
+            prev_detects = detects
 
     except KeyboardInterrupt:
         print("\n[interrupt] cleaning up ...")
