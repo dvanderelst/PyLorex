@@ -345,6 +345,96 @@ share one frame.
 Until that refactor lands, treat Phase 6 as a research path, not a
 calibration option for production runs.
 
+## Design notes / why this pipeline
+
+This section captures *why* the current procedure looks the way it
+does, separate from the *how* in Phases 1–6. Useful both for picking
+the trail back up months later and for anyone reusing this library
+for a different rig.
+
+### What Phases 1–4 actually solved
+
+The wall-flush baseline absolute bias (≲ 75 mm with the current
+calibration) is **not the contribution of a single phase**. It's the
+combination of two fixes:
+
+- **Plumb-line cross-camera alignment (Phase 3).** Earlier the
+  `shark2tiger_delta_y` was hardcoded at a value that was ~520 mm
+  wrong (one camera's PnP-derived nadir had drifted from the
+  physical one). Moving to a plumb-line + tape-measured inter-camera
+  distance (`script_set_camera_center.py` → `camera_system.json`)
+  collapsed the cross-camera disagreement from a U-shape with a
+  ~360 mm peak to ~0 mean with ~70 mm scatter.
+- **Ray-plane runtime projection (Phase 4 implicit, in
+  `Lorex.get_aruco`).** Earlier the marker pixel was back-projected
+  via `H_raw + λ`, where `H_raw` is a homography fitted on the dot
+  board on the floor. Outside the dot-board footprint that's a
+  *linear extrapolation*, and at the periphery of a multi-metre
+  arena the extrapolation error dominates. Ray-plane intersection
+  at z = `marker_height_mm` uses `K, dist, R, t` jointly from
+  `solvePnP` and is well-defined across the full FOV.
+
+PnP and `H_raw` themselves are tight (sub-mm RMS at the dot grid);
+the problem was always extrapolation behaviour and the cross-camera
+offset, not poor solves.
+
+### Why Phase 6 is currently held back
+
+The bundle adjustment in `script_calibrate_plank.py` converges
+cleanly and produces an internally consistent calibration. The
+blocker for using it in production is **not the bundle** — it's that
+*every consumer of the calibration has to agree on the projection
+model end-to-end*. In the current rig:
+
+- The runtime tracker uses ray-plane (post-2026-05-26).
+- The top-down warp (`LorexLib/Environment.py`) and the consumer's
+  arena-geometry build script still use `H_raw + λ`.
+
+The bundle re-solves `K, dist, R, t` but `H_raw` stays fixed (it was
+fitted once from the dot-board capture). After bundle adoption the
+runtime tracker and the warp end up in **different frames** at the
+periphery — annotations and wall geometry no longer overlay the real
+walls (verified: ~500–700 mm extent offset and 100–200 mm wall-flush
+biases when we tried to adopt the bundle outputs end-to-end).
+
+### What would unblock Phase 6
+
+Refactor every consumer of the calibration to use the same ray-plane
+projection the tracker uses, so there is **one** camera model in
+play. Concretely:
+
+- `LorexLib/Environment.py`'s warp from camera pixels to a top-down
+  arena grid must switch from `H_raw + λ` to ray-plane intersection
+  at the target z.
+- Any downstream pixel → world mapping in the consumer code
+  (3PiRobot's `SCRIPT_BuildArenaGeometry.py` here; analogous code in
+  a different rig) must do the same.
+
+Once that's in, `script_calibrate_plank.py` can replace dot-board
+PnP + plumb-line as Phases 2 + 3, the runtime keeps using ray-plane
+(Phase 4 unchanged), and the cross-camera alignment falls out of the
+bundle's rigid-plank constraint at FOV-overlap captures (no separate
+delta to maintain).
+
+### Reuse note
+
+If you are forking PyLorex for a different overhead-camera tracking
+rig:
+
+- **Phases 1–4 are the recommended starting point.** They are
+  well-tested and give a calibration in the ~50 mm absolute-bias
+  band at typical arena scales without needing to think about
+  bundle adjustment.
+- **The dot-board + plumb-line workflow is robust and cheap.** Don't
+  reach for the plank-bundle path unless you're already constrained
+  out of Phases 1–4 (e.g. you don't have floor space for a dot
+  board, or the cameras can't both see the same board).
+- **If you want better than ~50 mm,** do the warp refactor in your
+  downstream consumer first, then move to the plank-bundle path.
+  The order matters — adopting the bundle without the warp refactor
+  produces a calibration that's internally consistent but disagrees
+  with your downstream geometry.
+
 ## Notes
 
 - The marker-height bias correction in `LorexLib/Lorex.py` relies on
