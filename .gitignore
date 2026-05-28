@@ -1,5 +1,6 @@
 
 .idea/
+__pycache__/
 
 PyLorex/Calibration/Calibration_images*
 PyLorex/Calibration/Results/**/*.jpg
@@ -7,7 +8,6 @@ PyLorex/Calibration/Results/**/*.png
 PyLorex/Calibration/Results/**/*.html
 PyLorex/Calibration/Results/**/*.txt
 
-PyLorex/LorexLib/__pycache__/
 PyLorex/LorexLib/voices/
 PyLorex/Temp/
 PyLorex/OldStuff/
@@ -16,8 +16,6 @@ PyLorex/Calibration/CameraCenterSnapshots/
 PyLorex/Calibration/PlankSnapshots/
 PyLorex/Calibration/WallProbeSnapshots/
 
-
-PyLorex/library/__pycache__/
 
 PyLorex/Markers/generated/
 
